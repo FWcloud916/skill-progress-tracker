@@ -452,6 +452,7 @@ class TestCliCustomDirAndRoot:
             cwd=project,
             capture_output=True,
             text=True,
+            check=False,
             env={
                 **__import__("os").environ,
                 "PROGRESS_TRACKER_DIR": f"../{escaped_name}",
