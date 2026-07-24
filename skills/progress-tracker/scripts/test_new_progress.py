@@ -11,6 +11,7 @@ detection logic which can only be graded by a model.
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -44,6 +45,7 @@ def run_cli(args, cwd):
         cwd=cwd,
         capture_output=True,
         text=True,
+        check=False,
     )
 
 
@@ -200,7 +202,7 @@ class TestResolveProjectRoot:
         # tmp_path itself is very unlikely to be inside a git repo in CI/sandboxes,
         # but guard anyway: only assert when git genuinely reports nothing.
         result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"], cwd=tmp_path, capture_output=True
+            ["git", "rev-parse", "--show-toplevel"], cwd=tmp_path, capture_output=True, check=False
         )
         if result.returncode != 0:
             root = np.resolve_project_root(None)
@@ -357,7 +359,8 @@ class TestCliCustomDirAndRoot:
             cwd=project,
             capture_output=True,
             text=True,
-            env={**__import__("os").environ, "PROGRESS_TRACKER_DIR": "custom-progress"},
+            check=False,
+            env={**os.environ, "PROGRESS_TRACKER_DIR": "custom-progress"},
         )
         assert env_result.returncode == 0, env_result.stderr
         assert (project / "custom-progress").exists()

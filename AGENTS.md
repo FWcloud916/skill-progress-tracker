@@ -40,6 +40,11 @@ doubles as a Claude Code plugin (`.claude-plugin/`) and marketplace for it.
 - MUST edit `AGENTS.md`, never `CLAUDE.md` (symlink)
 - User-visible skill changes MUST bump `version` in `.claude-plugin/plugin.json`
   — plugin users only receive updates on a version bump (source: plugins reference)
+- MUST lint with the exact ruff version pinned in `.github/workflows/ci.yml`
+  (`uvx ruff==<pinned version> check .`), not a locally installed `ruff`
+  binary — a stale local install can silently under-report (ruff has changed
+  its default rule set across versions before; a local pass is not proof CI
+  will pass) (source: 2026-07-24 CI failure, see docs/design-decisions.md)
 
 ## Read before you work
 

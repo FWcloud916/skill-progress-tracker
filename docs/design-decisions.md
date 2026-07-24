@@ -9,6 +9,24 @@ seems arbitrary, check here before changing it.
 
 ---
 
+## 2026-07-24 — Pin ruff's version in CI after a false-green local check
+
+The first CI run failed `ruff check .` with 23 errors (deprecated `typing.List`/
+`Optional`/`Tuple` usage, a naive `date.today()` call, `subprocess.run` without
+an explicit `check=`), even though a local `ruff check .` run reported "All
+checks passed!" immediately beforehand. Root cause: the locally installed
+`ruff` binary was an older version (0.15.4) than the one CI's
+`uv tool install ruff` resolved at run time (0.16.0), and ruff had changed
+which rule families are enabled by default between those versions. Same repo,
+same command, different result — purely from an unpinned tool version.
+
+Fix: pin an exact ruff version in `.github/workflows/ci.yml`
+(`uv tool install ruff==0.16.0`) instead of "latest", and record here that
+local verification MUST use the same pinned version (`uvx ruff==0.16.0 check .`)
+— never trust a `ruff` binary that happens to already be on `PATH` locally,
+since its version (and therefore its default rule set) isn't guaranteed to
+match CI's.
+
 ## 2026-07-24 — Extracted from Kdan Mobile's `progress-note` skill
 
 `progress-tracker` generalizes Kdan Mobile's internal `kdan-workflow` repo's

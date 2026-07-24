@@ -15,7 +15,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from grade_scenarios import grade  # noqa: E402
+from grade_scenarios import grade
 
 
 class GradeScenariosTests(unittest.TestCase):

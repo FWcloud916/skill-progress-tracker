@@ -84,7 +84,6 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -102,7 +101,7 @@ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 TABLE_HEADER_MARKER = "| Status | Item | Folder | Scope | Ticket | Plan | Created | Notes |"
 
 # Type alias: (scope_name, branch, ticket)
-ScopeEntry = Tuple[str, str, str]
+ScopeEntry = tuple[str, str, str]
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -117,7 +116,7 @@ def validate_slug(slug: str) -> None:
         )
 
 
-def resolve_project_root(root_arg: Optional[str]) -> Path:
+def resolve_project_root(root_arg: str | None) -> Path:
     """Resolve the project root.
 
     Precedence: --root argument > git repository top level > current
@@ -151,7 +150,7 @@ def normalize_ticket(value: str, default: str = "N/A") -> str:
     return v if v else default
 
 
-def parse_scope(scope_arg: str) -> List[ScopeEntry]:
+def parse_scope(scope_arg: str) -> list[ScopeEntry]:
     """Parse the --scope argument into a list of (name, branch, ticket) tuples.
 
     Each comma-separated entry has the form:  name[:branch[:ticket]]
@@ -161,7 +160,7 @@ def parse_scope(scope_arg: str) -> List[ScopeEntry]:
       - branch defaults to 'TBD' when omitted or empty
       - ticket defaults to 'TBD' when omitted; kept verbatim otherwise
     """
-    entries: List[ScopeEntry] = []
+    entries: list[ScopeEntry] = []
 
     for raw in scope_arg.split(","):
         raw = raw.strip()
@@ -187,7 +186,7 @@ def parse_scope(scope_arg: str) -> List[ScopeEntry]:
     return entries
 
 
-def resolve_plan(plan_arg: Optional[str]) -> Tuple[str, Optional[Path]]:
+def resolve_plan(plan_arg: str | None) -> tuple[str, Path | None]:
     """Resolve a plan argument to (plan_name, source_path).
 
     Returns ("N/A", None) when no plan is specified.
@@ -266,9 +265,9 @@ def slug_to_title(slug: str) -> str:
     return slug.replace("-", " ").title()
 
 
-def render_scope_rows(entries: List[ScopeEntry]) -> str:
+def render_scope_rows(entries: list[ScopeEntry]) -> str:
     """Render the per-scope table rows for the ## Scope section."""
-    lines: List[str] = []
+    lines: list[str] = []
     for name, branch, ticket in entries:
         branch_cell = f"`{branch}`" if branch != "TBD" else "TBD"
         lines.append(f"| `{name}` | {branch_cell} | {ticket} |  |")
@@ -279,7 +278,7 @@ def render_template(
     template_path: Path,
     title: str,
     slug: str,
-    scope_entries: List[ScopeEntry],
+    scope_entries: list[ScopeEntry],
     ticket: str,
     plan_name: str,
     today: str,
@@ -330,7 +329,7 @@ def append_index_row(
     tracker_dirname: str,
     folder_name: str,
     title: str,
-    scope_entries: List[ScopeEntry],
+    scope_entries: list[ScopeEntry],
     ticket: str,
     plan_name: str,
     today: str,
@@ -476,15 +475,17 @@ def main() -> None:
 
     slug: str = args.slug
     title: str = args.title if args.title else slug_to_title(slug)
-    today: str = date.today().isoformat()
+    # Intentionally the local calendar date, not UTC: this dates a folder name
+    # for the developer running the command, on their machine, right now.
+    today: str = date.today().isoformat()  # noqa: DTZ011
     dry_run: bool = args.dry_run
 
     # --- Validate / parse ---
     validate_slug(slug)
-    scope_entries: List[ScopeEntry] = parse_scope(args.scope)
+    scope_entries: list[ScopeEntry] = parse_scope(args.scope)
     ticket: str = normalize_ticket(args.ticket or "", default="N/A")
     plan_name: str
-    source_path: Optional[Path]
+    source_path: Path | None
     plan_name, source_path = resolve_plan(args.plan)
 
     project_root = resolve_project_root(args.root)

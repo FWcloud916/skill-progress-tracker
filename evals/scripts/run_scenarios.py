@@ -39,6 +39,7 @@ def run_step(step: dict, repo_dir: Path) -> None:
             cwd=repo_dir,
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode != 0:
             raise RuntimeError(
@@ -50,6 +51,7 @@ def run_step(step: dict, repo_dir: Path) -> None:
             cwd=repo_dir,
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode == 0:
             raise RuntimeError(f"step 'run_expect_fail' {step['args']} unexpectedly succeeded")
@@ -95,6 +97,7 @@ def run_scenario(name: str) -> tuple[bool, str]:
             [sys.executable, str(GRADE_SCRIPT), str(repo_dir), str(scenario_dir / "scenario.json")],
             capture_output=True,
             text=True,
+            check=False,
         )
         if grade_result.returncode != 0:
             return False, grade_result.stdout.strip() or grade_result.stderr.strip()
