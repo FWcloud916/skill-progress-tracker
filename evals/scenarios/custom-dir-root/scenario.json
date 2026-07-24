@@ -1,0 +1,15 @@
+{
+  "description": "--dir overrides the tracker directory name; the default progress/ directory is never created when a custom one is used.",
+  "steps": [
+    {"type": "run", "args": ["root-task", "--scope", "api", "--dir", "dev-log"]}
+  ],
+  "checks": {
+    "files_exist": [
+      "dev-log/INDEX.md",
+      "dev-log/*-root-task/PROGRESS.md"
+    ],
+    "files_absent": [
+      "progress"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "description": "Creating a single-scope item scaffolds the tracker dir and writes a clean PROGRESS.md with status planning.",
+  "steps": [
+    {"type": "run", "args": ["basic-task", "--scope", "api"]}
+  ],
+  "checks": {
+    "files_exist": [
+      "progress/README.md",
+      "progress/INDEX.md",
+      "progress/_template/PROGRESS.md",
+      "progress/_plans/README.md",
+      "progress/*-basic-task/PROGRESS.md"
+    ],
+    "content_contains": [
+      {"glob": "progress/INDEX.md", "text": "| `planning` | Basic Task |"},
+      {"glob": "progress/*-basic-task/PROGRESS.md", "text": "**Status:** planning"},
+      {"glob": "progress/*-basic-task/PROGRESS.md", "text": "**Ticket:** N/A"}
+    ],
+    "content_not_contains": [
+      {"glob": "progress/*-basic-task/PROGRESS.md", "text": "{{"}
+    ]
+  }
+}

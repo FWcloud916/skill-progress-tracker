@@ -1,0 +1,17 @@
+{
+  "description": "--plan copies the plan file into a version-controlled _plans/ snapshot and links it via relative path.",
+  "steps": [
+    {"type": "write", "path": "my-plan.md", "content": "# The Plan\n\nDo the thing.\n"},
+    {"type": "run", "args": ["planned-task", "--scope", "api", "--plan", "./my-plan.md"]}
+  ],
+  "checks": {
+    "files_exist": [
+      "progress/_plans/my-plan.md",
+      "progress/*-planned-task/PROGRESS.md"
+    ],
+    "content_contains": [
+      {"glob": "progress/*-planned-task/PROGRESS.md", "text": "../_plans/my-plan.md"},
+      {"glob": "progress/INDEX.md", "text": "_plans/my-plan.md"}
+    ]
+  }
+}

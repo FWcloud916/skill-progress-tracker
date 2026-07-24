@@ -1,0 +1,19 @@
+{
+  "description": "Closing out an item (simulating the manual/agent-driven 'after completing work' edits) updates PROGRESS.md's Outcome and the INDEX status to done.",
+  "steps": [
+    {"type": "run", "args": ["close-task", "--scope", "api"]},
+    {"type": "edit", "glob": "progress/*-close-task/PROGRESS.md", "find": "**Status:** planning", "replace": "**Status:** done"},
+    {"type": "edit", "glob": "progress/*-close-task/PROGRESS.md", "find": "**Final status:**", "replace": "**Final status:** Shipped in PR #42"},
+    {"type": "edit", "glob": "progress/INDEX.md", "find": "| `planning` | Close Task |", "replace": "| `done` | Close Task |"}
+  ],
+  "checks": {
+    "content_contains": [
+      {"glob": "progress/*-close-task/PROGRESS.md", "text": "**Status:** done"},
+      {"glob": "progress/*-close-task/PROGRESS.md", "text": "**Final status:** Shipped in PR #42"},
+      {"glob": "progress/INDEX.md", "text": "| `done` | Close Task |"}
+    ],
+    "content_not_contains": [
+      {"glob": "progress/INDEX.md", "text": "| `planning` | Close Task |"}
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install ruff
+        run: uv tool install ruff
+
+      - name: ruff check
+        run: uv tool run ruff check .
+
+      - name: Consistency gate (verify.sh)
+        run: bash scripts/verify.sh

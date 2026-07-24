@@ -1,0 +1,79 @@
+# progress-tracker — Agent Guide
+
+An agent skill that tracks local development progress across single- or
+multi-scope tasks for any project. The skill itself lives in
+`skills/progress-tracker/` (SKILL.md + references/ + scripts/); the repo
+doubles as a Claude Code plugin (`.claude-plugin/`) and marketplace for it.
+
+## Hard constraints
+
+- MUST run `bash scripts/verify.sh` and see it pass before declaring any
+  change done (source: this repo's verification gate)
+- MUST keep the placeholder set `new_progress.py` substitutes (`{{TITLE}}`,
+  `{{SLUG}}`, `{{SCOPE_ROWS}}`, `{{TICKET}}`, `{{PLAN}}`, `{{DATE}}`) in exact
+  sync with `references/PROGRESS.template.md`'s placeholders — adding or
+  renaming one requires updating both (source: scripts/verify.sh)
+- MUST keep `new_progress.py`'s `TABLE_HEADER_MARKER` string identical to
+  `references/INDEX.template.md`'s header row — the script locates the
+  insertion point by exact string match (source: scripts/verify.sh)
+- MUST keep the status enum (`planning`, `in-progress`, `review`, `blocked`,
+  `done`, `abandoned`) and its transition diagram identical across
+  `SKILL.md`, `references/workflow.md`, and `references/INDEX.template.md`
+  (source: scripts/verify.sh)
+- MUST NOT reintroduce ticket normalization (`#`-prefixing digits, or any
+  other tracker-specific reformatting) — tickets are kept verbatim by design
+  (source: docs/design-decisions.md)
+- MUST NOT reintroduce directory validation for `--scope` entries — scope
+  names are free-form labels, not validated against any filesystem path
+  (source: docs/design-decisions.md)
+- MUST NOT hardcode a specific tool's plan-output path (e.g. `~/.claude/plans`)
+  as a default lookup location — bare-filename plan resolution only happens
+  via the explicit `$PROGRESS_TRACKER_PLANS_DIR` env var (source: docs/design-decisions.md)
+- MUST update `evals/scenarios/*/scenario.json` (and its grader assertions)
+  in the same change whenever a CLI flag, output file, or file-scope
+  behavior changes (source: evals/README.md)
+- Changing `new_progress.py`'s behavior MUST come with matching updates to
+  `skills/progress-tracker/scripts/test_new_progress.py` in the same change —
+  this test suite is the primary correctness gate, since (unlike
+  doc-architect's model-graded detection) this skill's core logic is
+  deterministic and testable (source: docs/design-decisions.md)
+- MUST edit `AGENTS.md`, never `CLAUDE.md` (symlink)
+- User-visible skill changes MUST bump `version` in `.claude-plugin/plugin.json`
+  — plugin users only receive updates on a version bump (source: plugins reference)
+
+## Read before you work
+
+Read the matching doc **before non-trivial work**. Small fixes (typos,
+single-line edits) can skip; do not pre-load all docs.
+
+| Task | Read first |
+|---|---|
+| Changing scaffold-script behavior or CLI arguments | [SKILL.md](skills/progress-tracker/SKILL.md) + [new_progress.py](skills/progress-tracker/scripts/new_progress.py) |
+| Changing the item template or INDEX shape | [PROGRESS.template.md](skills/progress-tracker/references/PROGRESS.template.md) + [INDEX.template.md](skills/progress-tracker/references/INDEX.template.md) |
+| Changing the status lifecycle | [SKILL.md](skills/progress-tracker/SKILL.md) §Status lifecycle + [workflow.md](skills/progress-tracker/references/workflow.md) |
+| Changing eval scenarios or the trigger matrix | [evals/README.md](evals/README.md) |
+| Understanding why it's built this way | [docs/design-decisions.md](docs/design-decisions.md) |
+
+## Commands
+
+```bash
+bash scripts/verify.sh                                                          # consistency gate — the verification gate for "done"
+uv run --with pytest python3 -m pytest skills/progress-tracker/scripts/ -v      # unit + integration tests for the scaffold script
+./evals/scripts/run_scenarios.sh                                                 # end-to-end lifecycle scenarios
+python3 evals/scripts/test_grade_scenarios.py                                    # free scenario-grader regression tests
+```
+
+## Conventions
+
+- Enhance over rewrite: extend existing tables/sections; restructure only
+  when scale justifies it.
+- Requirement keywords (MUST/SHOULD/MAY) follow RFC 2119, uppercase.
+- English throughout — templates, field names, section headings. (This skill
+  is the generic, workspace-independent sibling of Kdan Mobile's internal
+  `progress-note` skill, which stays in Traditional Chinese for that
+  workspace.)
+
+## Docs maintenance
+
+When modifying any file under `docs/`, update its `> **Last updated:**
+YYYY-MM-DD` frontmatter to today's date.

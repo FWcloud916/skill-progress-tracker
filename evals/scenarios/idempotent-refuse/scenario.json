@@ -1,0 +1,12 @@
+{
+  "description": "Running the same slug twice on the same day refuses to overwrite the existing item folder, and the INDEX gains exactly one row.",
+  "steps": [
+    {"type": "run", "args": ["dup-task", "--scope", "api"]},
+    {"type": "run_expect_fail", "args": ["dup-task", "--scope", "api"], "expect_stderr_contains": "already exists"}
+  ],
+  "checks": {
+    "content_count": [
+      {"glob": "progress/INDEX.md", "text": "Dup Task", "count": 1}
+    ]
+  }
+}

@@ -1,0 +1,68 @@
+[
+  {
+    "id": "start-tracking-lifecycle",
+    "prompt": "I want to start tracking this refactor — it'll take investigate, fix, test, and a PR.",
+    "expected": "progress-tracker",
+    "reason": "A full-lifecycle development task with no existing tracking is the primary trigger."
+  },
+  {
+    "id": "multi-scope-task",
+    "prompt": "Create a progress item for this task — it touches both the api and the worker.",
+    "expected": "progress-tracker",
+    "reason": "Multi-scope lifecycle tracking is the skill's distinguishing use case."
+  },
+  {
+    "id": "explicit-invocation",
+    "prompt": "/progress-tracker create an item for the payments refactor",
+    "expected": "progress-tracker",
+    "reason": "Explicit invocation always selects this skill."
+  },
+  {
+    "id": "update-existing-item",
+    "prompt": "Update the progress item for subscription-refund — the branch is ready and the PR is open.",
+    "expected": "progress-tracker",
+    "reason": "Updating an existing item's status/scope is a core operation."
+  },
+  {
+    "id": "close-out-item",
+    "prompt": "Close out the progress item for the refund flow, the PR just merged.",
+    "expected": "progress-tracker",
+    "reason": "Closing out (Outcome + status done) is the final lifecycle stage this skill owns."
+  },
+  {
+    "id": "single-scope-bugfix-with-lifecycle",
+    "prompt": "This is a single-service bug fix but I still want a progress record through investigate/fix/test/PR.",
+    "expected": "progress-tracker",
+    "reason": "A single-scope task with a full lifecycle still qualifies — scope count is not the trigger condition."
+  },
+  {
+    "id": "zh-lifecycle-request",
+    "prompt": "幫我開一個進度追蹤項目，這個任務會橫跨兩個服務",
+    "expected": "progress-tracker",
+    "reason": "Non-English phrasing of the same lifecycle-tracking request still triggers."
+  },
+  {
+    "id": "one-off-question",
+    "prompt": "What does this function do?",
+    "expected": "not-progress-tracker",
+    "reason": "A genuine one-off question has no lifecycle to track."
+  },
+  {
+    "id": "trivial-typo-fix",
+    "prompt": "Fix this typo in the README.",
+    "expected": "not-progress-tracker",
+    "reason": "A trivial edit with no investigate/fix/test/PR lifecycle doesn't warrant a progress item."
+  },
+  {
+    "id": "config-tweak",
+    "prompt": "Bump the timeout value in config.yml to 30 seconds.",
+    "expected": "not-progress-tracker",
+    "reason": "A one-line config change is not a tracked lifecycle task."
+  },
+  {
+    "id": "repo-root-harness-file-boundary",
+    "prompt": "Set up a single PROGRESS.md at the repo root so agents can resume this project across sessions.",
+    "expected": "not-progress-tracker",
+    "reason": "A single repo-root agent-harness state file (doc-architect's opt-in PROGRESS.md module) is a different concept from this skill's multi-item dated journal under progress/ — do not conflate the two."
+  }
+]

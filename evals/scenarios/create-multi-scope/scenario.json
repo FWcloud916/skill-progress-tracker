@@ -1,0 +1,14 @@
+{
+  "description": "Multiple --scope entries expand into one Scope-table row each, with branch/ticket kept verbatim (no directory validation, no ticket normalization).",
+  "steps": [
+    {"type": "run", "args": ["multi-task", "--scope", "api:feature/x:JIRA-1,worker:feature/y", "--ticket", "EPIC-9"]}
+  ],
+  "checks": {
+    "content_contains": [
+      {"glob": "progress/*-multi-task/PROGRESS.md", "text": "| `api` | `feature/x` | JIRA-1 |  |"},
+      {"glob": "progress/*-multi-task/PROGRESS.md", "text": "| `worker` | `feature/y` | TBD |  |"},
+      {"glob": "progress/*-multi-task/PROGRESS.md", "text": "**Ticket:** EPIC-9"},
+      {"glob": "progress/INDEX.md", "text": "`api`, `worker`"}
+    ]
+  }
+}

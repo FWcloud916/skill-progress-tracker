@@ -1,0 +1,133 @@
+---
+name: progress-tracker
+description: >-
+  Manages local development progress tracking under a project's progress/
+  directory. Trigger this skill when: (1) the user wants to start tracking a
+  development task that runs a full lifecycle (investigate → fix → test →
+  PR/MR), whether it touches one scope (service, package, repo) or spans
+  several — and wants a progress record; (2) the user asks to create,
+  update, or close out a progress item; (3) the user explicitly invokes
+  /progress-tracker. Do NOT trigger for genuine one-off questions or trivial
+  edits with no lifecycle to track (a typo fix, a config tweak, answering a
+  question) — a single-scope bug fix that goes through investigate/fix/test/PR
+  still qualifies for (1).
+---
+
+# Development Progress Tracker
+
+Track development tasks locally under a `progress/` directory at the project
+root (configurable — see below). Works for a single-scope project or one that
+spans several scopes (services, packages, sibling repos); "scope" is a
+free-form label, not validated against anything.
+
+Full spec: `references/workflow.md`
+Item list: `<tracker-dir>/INDEX.md`
+Template:  `<tracker-dir>/_template/PROGRESS.md`
+
+> If you're inside Kdan Mobile's `kdan-workflow` workspace, use the
+> workspace-specific `progress-note` skill instead — it wires into that
+> workspace's ticket system and multi-service layout. This skill is the
+> generic, workspace-independent sibling for any other project.
+
+---
+
+## Before starting work
+
+Create the progress item with the scaffold script. Run from anywhere inside
+the project (the script locates the project root itself):
+
+```bash
+# Minimal — one scope entry (branch/ticket filled in later as TBD)
+uv run scripts/new_progress.py <slug> \
+  --scope api \
+  [--plan <path>] \
+  [--title "Task title"] \
+  [--dry-run]
+
+# Full — per-scope-entry branch and ticket; --ticket is the umbrella/epic reference
+uv run scripts/new_progress.py <slug> \
+  --scope "api:feature/my-branch:JIRA-111,worker:feature/my-branch" \
+  --ticket EPIC-100 \
+  --plan <path>
+```
+
+Key arguments:
+- `slug` — kebab-case identifier, e.g. `subscription-refund-flow`
+- `--scope` — `name[:branch[:ticket]]`, comma-separated. `name` is a
+  free-form label — not validated against any directory. `branch` and
+  per-entry `ticket` default to `TBD` when omitted. Ticket values are kept
+  **verbatim** — this skill has no opinion on your tracker's numbering
+  convention (serial, `#123`, `JIRA-111`, a URL — all pass through as given).
+- `--ticket` — umbrella/epic reference for the whole task (optional, `N/A`
+  if omitted). Kept verbatim.
+- `--plan` — path to the associated plan file (optional but recommended when
+  a plan exists). The plan is **copied** into `<tracker-dir>/_plans/` as a
+  version-controlled snapshot and linked via a relative path in `PROGRESS.md`.
+  - A path (absolute, or containing `/`) is validated by existence directly —
+    works with plan output from any tool or agent.
+  - A bare filename (e.g. `my-plan.md`) is resolved against
+    `$PROGRESS_TRACKER_PLANS_DIR`, if that env var is set. Without it, a bare
+    filename is an error asking for a path instead.
+- `--title` — human-readable title (defaults to the slug title-cased)
+- `--dir` — tracker directory name, relative to the project root. Defaults to
+  `$PROGRESS_TRACKER_DIR`, then `progress`.
+- `--root` — project root directory. Defaults to the current git repository's
+  top level, falling back to the current working directory.
+
+If a plan for this task exists anywhere, **always** pass it via `--plan`.
+
+Use `--dry-run` first to preview what would be created.
+
+On first use in a project, the script scaffolds the tracker directory's
+supporting files (`README.md`, `INDEX.md`, `_template/PROGRESS.md`,
+`_plans/README.md`) from this skill's bundled references — nothing to set up
+by hand.
+
+---
+
+## During work
+
+Keep `<tracker-dir>/YYYY-MM-DD-<slug>/PROGRESS.md` current:
+
+1. **Back-fill `TBD` values** in `## Scope` as branches are created and tickets are opened
+2. Tick off completed items in `## Task list` (`- [x]`)
+3. Add a `### YYYY-MM-DD` entry under `## Work log` each day with brief notes
+4. Update the **Updated** field to today
+5. Update the item's Status in `<tracker-dir>/INDEX.md` per the lifecycle below
+
+---
+
+## Status lifecycle (canonical)
+
+The Status field in `<tracker-dir>/INDEX.md` takes exactly these values:
+
+```
+planning → in-progress → review → done
+                       ↘ abandoned
+         ↘ blocked → in-progress
+```
+
+| Status | Meaning |
+|---|---|
+| `planning` | Item created, implementation not started (scaffold-script default) |
+| `in-progress` | Under active development |
+| `review` | PR/MR opened, in code review / QA — **not** `done`; that comes after merge |
+| `blocked` | Paused on an external dependency |
+| `done` | Development complete (PR/MR merged) |
+| `abandoned` | Stopped without completing |
+
+---
+
+## After completing work
+
+1. Fill in `## Outcome` in the `PROGRESS.md` (final status, PR/commit refs, follow-up items)
+2. Update **Updated** to today
+3. Change the item's row in `<tracker-dir>/INDEX.md` — set Status to `done` (or `abandoned`)
+
+---
+
+## Cleanup
+
+**Never delete tracker-directory items automatically.** Deleting folders and
+removing rows from `INDEX.md` is a manual human decision. Only update status
+fields; do not remove content.
