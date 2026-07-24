@@ -56,8 +56,8 @@ The script will:
 ### 2. During work: keep the record current
 
 Open `<tracker-dir>/YYYY-MM-DD-<slug>/PROGRESS.md`, back-fill `TBD` values,
-tick off tasks, add a `## Work log` entry, update **Updated** and the
-`INDEX.md` status column. Field-by-field spec and the status enum
+tick off tasks, add a `## Work log` entry, update **Updated**, and update the
+status in both `PROGRESS.md` and `INDEX.md`. Field-by-field spec and the status enum
 (`planning` / `in-progress` / `review` / `blocked` / `done` / `abandoned`) →
 [`SKILL.md`](../SKILL.md) §During work, §Status lifecycle.
 
@@ -65,7 +65,7 @@ tick off tasks, add a `## Work log` entry, update **Updated** and the
 
 - Fill in `PROGRESS.md`'s `## Outcome` (final status, PR/commit refs, follow-ups)
 - Update the **Updated** field
-- Change the item's row in `INDEX.md` to `done` (or `abandoned`)
+- Change the status in both `PROGRESS.md` and `INDEX.md` to `done` (or `abandoned`)
 
 ### Manual fallback (no script)
 
@@ -138,8 +138,19 @@ One row per scope entry, filled in progressively during development:
 
 ## Status lifecycle
 
-Single source of truth for the status enum and transition diagram →
-[`SKILL.md`](../SKILL.md) §Status lifecycle.
+Keep the status values in `PROGRESS.md` and `INDEX.md` identical at every
+transition. This block is mirrored exactly in [`SKILL.md`](../SKILL.md) and
+the scaffolded `INDEX.md`:
+
+<!-- STATUS_LIFECYCLE_START -->
+Status enum: `planning`, `in-progress`, `review`, `blocked`, `done`, `abandoned`
+
+```
+planning → in-progress → review → done
+                       ↘ abandoned
+         ↘ blocked → in-progress
+```
+<!-- STATUS_LIFECYCLE_END -->
 
 ---
 
@@ -200,7 +211,7 @@ its own.
   `abandoned` first, then clean up manually)
 - Don't fill real content into `_template/PROGRESS.md` (the template should
   only ever contain `{{PLACEHOLDER}}` tokens)
-- Don't update `PROGRESS.md` without also writing back the `INDEX.md` status column
+- Don't change status in only one file; keep `PROGRESS.md` and `INDEX.md` identical
 - Don't pass a `slug` containing uppercase letters, underscores, or spaces (the script rejects it)
 - Don't use a separator other than comma between `--scope` entries (comma
   separates entries, colon separates name/branch/ticket within one)

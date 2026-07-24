@@ -85,7 +85,10 @@ def run_scenario(name: str) -> tuple[bool, str]:
     scenario = json.loads((scenario_dir / "scenario.json").read_text())
 
     with tempfile.TemporaryDirectory(prefix=f"progress-tracker-scenario-{name}-") as tmp:
-        repo_dir = Path(tmp)
+        # Keep the repository one level below the unique temp root so scenarios
+        # can safely assert that `../...` escape targets remain absent.
+        repo_dir = Path(tmp) / "repo"
+        repo_dir.mkdir()
         init_git_repo(repo_dir)
         try:
             for step in scenario["steps"]:

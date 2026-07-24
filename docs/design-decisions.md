@@ -94,3 +94,30 @@ Defaults to `progress/` at the project root (matching the Kdan predecessor's
 workspace-level "note" concept to disambiguate from). Configurable via
 `--dir` or `$PROGRESS_TRACKER_DIR` for projects that already use that name
 for something else, or prefer a dotfile (`.progress/`).
+
+## Portable script invocation
+
+Skill instructions refer to the scaffold script as
+`<skill-dir>/scripts/new_progress.py`, where `<skill-dir>` is the directory
+containing the installed skill's `SKILL.md`. A project cannot use a bare
+`new_progress.py` command because the script is bundled with the skill, not
+copied into every tracked project; runtime-specific environment variables
+would also undermine the skill's cross-agent portability.
+
+## Project-contained tracker paths
+
+`--dir` and `$PROGRESS_TRACKER_DIR` accept hidden or nested relative paths,
+but the resolved tracker path must be a strict descendant of the project
+root. Absolute paths, the root itself, parent traversal, and symlink escapes
+are rejected. This keeps an agent's tracker writes inside the project it was
+asked to operate on while preserving useful layouts such as `.progress/` and
+`docs/progress/`.
+
+## Validation-atomic item creation
+
+The scaffold script validates all predictable failure conditions before it
+writes anything: item-folder collisions, plan source/destination validity,
+bundled seed availability, output-path containment, template rendering, and
+the INDEX insertion marker. This guarantees that a validation error cannot
+leave an orphan `PROGRESS.md`, plan snapshot, or INDEX row. It is not a
+multi-file transaction against process crashes or storage failures.

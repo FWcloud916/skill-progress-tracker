@@ -33,19 +33,20 @@ Template:  `<tracker-dir>/_template/PROGRESS.md`
 
 ## Before starting work
 
-Create the progress item with the scaffold script. Run from anywhere inside
-the project (the script locates the project root itself):
+Create the progress item with the scaffold script. Resolve `<skill-dir>` to
+the directory containing this `SKILL.md`; the script can then run from
+anywhere inside the project because it locates the project root itself:
 
 ```bash
 # Minimal — one scope entry (branch/ticket filled in later as TBD)
-uv run scripts/new_progress.py <slug> \
+uv run <skill-dir>/scripts/new_progress.py <slug> \
   --scope api \
   [--plan <path>] \
   [--title "Task title"] \
   [--dry-run]
 
 # Full — per-scope-entry branch and ticket; --ticket is the umbrella/epic reference
-uv run scripts/new_progress.py <slug> \
+uv run <skill-dir>/scripts/new_progress.py <slug> \
   --scope "api:feature/my-branch:JIRA-111,worker:feature/my-branch" \
   --ticket EPIC-100 \
   --plan <path>
@@ -69,8 +70,10 @@ Key arguments:
     `$PROGRESS_TRACKER_PLANS_DIR`, if that env var is set. Without it, a bare
     filename is an error asking for a path instead.
 - `--title` — human-readable title (defaults to the slug title-cased)
-- `--dir` — tracker directory name, relative to the project root. Defaults to
-  `$PROGRESS_TRACKER_DIR`, then `progress`.
+- `--dir` — tracker directory path, relative to and strictly inside the
+  project root. Nested paths and dot-directories are allowed; absolute paths,
+  `.`, `..`, and symlinks that resolve outside the root are rejected. Defaults
+  to `$PROGRESS_TRACKER_DIR`, then `progress`.
 - `--root` — project root directory. Defaults to the current git repository's
   top level, falling back to the current working directory.
 
@@ -93,19 +96,25 @@ Keep `<tracker-dir>/YYYY-MM-DD-<slug>/PROGRESS.md` current:
 2. Tick off completed items in `## Task list` (`- [x]`)
 3. Add a `### YYYY-MM-DD` entry under `## Work log` each day with brief notes
 4. Update the **Updated** field to today
-5. Update the item's Status in `<tracker-dir>/INDEX.md` per the lifecycle below
+5. Update Status in both this `PROGRESS.md` and `<tracker-dir>/INDEX.md` per
+   the lifecycle below; the two values MUST stay identical
 
 ---
 
 ## Status lifecycle (canonical)
 
-The Status field in `<tracker-dir>/INDEX.md` takes exactly these values:
+The Status fields in `PROGRESS.md` and `<tracker-dir>/INDEX.md` take exactly
+these values and MUST stay identical:
+
+<!-- STATUS_LIFECYCLE_START -->
+Status enum: `planning`, `in-progress`, `review`, `blocked`, `done`, `abandoned`
 
 ```
 planning → in-progress → review → done
                        ↘ abandoned
          ↘ blocked → in-progress
 ```
+<!-- STATUS_LIFECYCLE_END -->
 
 | Status | Meaning |
 |---|---|
@@ -122,7 +131,8 @@ planning → in-progress → review → done
 
 1. Fill in `## Outcome` in the `PROGRESS.md` (final status, PR/commit refs, follow-up items)
 2. Update **Updated** to today
-3. Change the item's row in `<tracker-dir>/INDEX.md` — set Status to `done` (or `abandoned`)
+3. Set Status to `done` (or `abandoned`) in both `PROGRESS.md` and the item's
+   `<tracker-dir>/INDEX.md` row
 
 ---
 

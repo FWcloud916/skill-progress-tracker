@@ -31,11 +31,12 @@ The preloaded **progress-tracker** skill is your operating manual. Follow it str
   output, a draft doc, a linked file).
 - **During work**: keep `PROGRESS.md` current — back-fill `TBD` scope/ticket
   values as they become known, tick off the task list, add a dated Work log
-  entry, bump **Updated**, and mirror the status in `INDEX.md`.
+  entry, bump **Updated**, and keep the status in `PROGRESS.md` and `INDEX.md`
+  identical at every transition.
 - **Status lifecycle is fixed** (`planning → in-progress → review → done`,
   with `blocked`/`abandoned` branches) — never invent a new status value.
-- **After completing work**: fill in `## Outcome` and set the INDEX row's
-  status to `done` or `abandoned`.
+- **After completing work**: fill in `## Outcome` and set the status in both
+  `PROGRESS.md` and the INDEX row to `done` or `abandoned`.
 - **Cleanup is never automatic.** Do not delete item folders or INDEX rows —
   that is a human decision only.
 - **Scope guard**: touch only the tracker directory's files (`INDEX.md`, item

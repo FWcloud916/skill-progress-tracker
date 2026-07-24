@@ -137,6 +137,10 @@ class TestResolvePlan:
         with pytest.raises(SystemExit):
             np.resolve_plan(str(tmp_path / "nope.md"))
 
+    def test_path_input_directory_errors(self, tmp_path):
+        with pytest.raises(SystemExit):
+            np.resolve_plan(str(tmp_path))
+
     def test_relative_path_input(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "plan.md").write_text("hi")
@@ -207,6 +211,34 @@ class TestResolveProjectRoot:
         if result.returncode != 0:
             root = np.resolve_project_root(None)
             assert root == tmp_path
+
+
+class TestResolveTrackerDir:
+    def test_accepts_hidden_and_nested_relative_paths(self, tmp_path):
+        hidden, hidden_name = np.resolve_tracker_dir(tmp_path, ".progress")
+        nested, nested_name = np.resolve_tracker_dir(tmp_path, "docs/progress/")
+        assert hidden == tmp_path / ".progress"
+        assert hidden_name == ".progress"
+        assert nested == tmp_path / "docs" / "progress"
+        assert nested_name == "docs/progress"
+
+    @pytest.mark.parametrize("dirname", [".", "..", "../progress", "docs/../../progress"])
+    def test_rejects_root_and_parent_traversal(self, tmp_path, dirname):
+        with pytest.raises(SystemExit):
+            np.resolve_tracker_dir(tmp_path, dirname)
+
+    def test_rejects_absolute_path(self, tmp_path):
+        with pytest.raises(SystemExit):
+            np.resolve_tracker_dir(tmp_path, str(tmp_path / "progress"))
+
+    def test_rejects_symlink_escape(self, tmp_path):
+        project = tmp_path / "project"
+        outside = tmp_path / "outside"
+        project.mkdir()
+        outside.mkdir()
+        (project / "linked-progress").symlink_to(outside, target_is_directory=True)
+        with pytest.raises(SystemExit):
+            np.resolve_tracker_dir(project, "linked-progress")
 
 
 # ---------------------------------------------------------------------------
@@ -331,6 +363,25 @@ class TestCliPlanIntegration:
         result = run_cli(["task-b", "--scope", "api", "--plan", str(plan)], cwd=project)
         assert result.returncode != 0
         assert "already exists" in result.stderr
+        assert not list((project / "progress").glob("*-task-b"))
+        assert "Task B" not in (project / "progress" / "INDEX.md").read_text()
+
+    def test_broken_index_fails_before_writing_anything(self, project):
+        tracker = project / "progress"
+        tracker.mkdir()
+        (tracker / "INDEX.md").write_text("# No item table here\n")
+        plan = project / "my-plan.md"
+        plan.write_text("# The Plan\n")
+
+        result = run_cli(
+            ["broken-index", "--scope", "api", "--plan", str(plan)], cwd=project
+        )
+
+        assert result.returncode != 0
+        assert "table header marker" in result.stderr
+        assert not list(tracker.glob("*-broken-index"))
+        assert not (tracker / "_plans" / "my-plan.md").exists()
+        assert not (tracker / "README.md").exists()
 
 
 class TestCliCustomDirAndRoot:
@@ -339,6 +390,35 @@ class TestCliCustomDirAndRoot:
         assert result.returncode == 0, result.stderr
         assert (project / "dev-log").exists()
         assert not (project / "progress").exists()
+
+    def test_nested_custom_dir(self, project):
+        result = run_cli(
+            ["nested-dir-task", "--scope", "api", "--dir", "docs/progress/"],
+            cwd=project,
+        )
+        assert result.returncode == 0, result.stderr
+        assert (project / "docs" / "progress").exists()
+        index = (project / "docs" / "progress" / "INDEX.md").read_text()
+        assert "`docs/progress/" in index
+
+    def test_project_root_as_custom_dir_writes_nothing(self, project):
+        result = run_cli(
+            ["escape-task", "--scope", "api", "--dir", "."], cwd=project
+        )
+        assert result.returncode != 0
+        assert "--dir" in result.stderr
+        assert not list(project.glob("*-escape-task"))
+
+    def test_parent_escape_writes_nothing(self, project):
+        escaped_name = f"escaped-{project.name}"
+        escaped = project.parent / escaped_name
+        result = run_cli(
+            ["escape-task", "--scope", "api", "--dir", f"../{escaped_name}"],
+            cwd=project,
+        )
+        assert result.returncode != 0
+        assert "--dir" in result.stderr
+        assert not escaped.exists()
 
     def test_custom_root(self, tmp_path):
         # Root passed explicitly even though cwd is elsewhere.
@@ -364,6 +444,21 @@ class TestCliCustomDirAndRoot:
         )
         assert env_result.returncode == 0, env_result.stderr
         assert (project / "custom-progress").exists()
+
+    def test_env_var_dir_uses_same_validation(self, project):
+        escaped_name = f"env-escaped-{project.name}"
+        env_result = subprocess.run(
+            [sys.executable, str(SCRIPT_PATH), "env-escape-task", "--scope", "api"],
+            cwd=project,
+            capture_output=True,
+            text=True,
+            env={
+                **__import__("os").environ,
+                "PROGRESS_TRACKER_DIR": f"../{escaped_name}",
+            },
+        )
+        assert env_result.returncode != 0
+        assert not (project.parent / escaped_name).exists()
 
 
 class TestCliTitleDefaulting:

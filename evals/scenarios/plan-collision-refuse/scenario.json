@@ -1,0 +1,21 @@
+{
+  "description": "A reused plan snapshot filename is rejected before the second item writes any partial state.",
+  "steps": [
+    {"type": "write", "path": "my-plan.md", "content": "# The Plan\n"},
+    {"type": "run", "args": ["task-a", "--scope", "api", "--plan", "./my-plan.md"]},
+    {"type": "run_expect_fail", "args": ["task-b", "--scope", "api", "--plan", "./my-plan.md"], "expect_stderr_contains": "plan snapshot already exists"}
+  ],
+  "checks": {
+    "files_exist": [
+      "progress/*-task-a/PROGRESS.md",
+      "progress/_plans/my-plan.md"
+    ],
+    "files_absent": [
+      "progress/*-task-b/PROGRESS.md"
+    ],
+    "content_count": [
+      {"glob": "progress/INDEX.md", "text": "Task A", "count": 1},
+      {"glob": "progress/INDEX.md", "text": "Task B", "count": 0}
+    ]
+  }
+}

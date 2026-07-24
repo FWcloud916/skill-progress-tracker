@@ -15,22 +15,22 @@ entries, where:
             defaults to TBD
 
 Usage:
-    uv run new_progress.py <slug> --scope <entries> [options]
+    uv run <skill-dir>/scripts/new_progress.py <slug> --scope <entries> [options]
 
 Examples:
     # Minimal — one scope entry, no branch or ticket yet
-    uv run new_progress.py subscription-refund --scope api
+    uv run <skill-dir>/scripts/new_progress.py subscription-refund --scope api
 
     # Multiple scope entries with per-entry branches and tickets;
     # --ticket is the umbrella/epic reference for the whole task
-    uv run new_progress.py subscription-refund \\
+    uv run <skill-dir>/scripts/new_progress.py subscription-refund \\
         --scope "api:feature/refund:JIRA-111,worker:feature/refund" \\
         --ticket EPIC-100 \\
         --plan ./my-plan.md \\
         --title "Refund flow rework"
 
     # Dry-run preview (no files written)
-    uv run new_progress.py my-task --scope api --dry-run
+    uv run <skill-dir>/scripts/new_progress.py my-task --scope api --dry-run
 
 Arguments:
     slug          Kebab-case identifier for the task (e.g. subscription-refund).
@@ -55,7 +55,9 @@ Options:
                     Without it, a bare filename is an error asking for a path.
     --title       Human-readable title. Defaults to the slug with hyphens
                   replaced by spaces and title-cased.
-    --dir         Tracker directory name, relative to the project root.
+    --dir         Tracker directory path, relative to and strictly inside the
+                  project root. Nested paths and dot-directories are allowed;
+                  absolute paths, '.', '..', and symlink escapes are rejected.
                   Defaults to $PROGRESS_TRACKER_DIR, then "progress".
     --root        Project root directory. Defaults to the current git
                   repository's top level (`git rev-parse --show-toplevel`),
@@ -203,7 +205,7 @@ def resolve_plan(plan_arg: str | None) -> tuple[str, Path | None]:
     p = Path(plan_arg).expanduser()
     # Path input: contains a separator or is absolute
     if "/" in plan_arg or p.is_absolute():
-        if not p.exists():
+        if not p.is_file():
             sys.exit(f"ERROR: plan file not found: {p}")
         return p.name, p
 
@@ -217,7 +219,7 @@ def resolve_plan(plan_arg: str | None) -> tuple[str, Path | None]:
         )
     plans_dir = Path(plans_dir_env).expanduser()
     candidate = plans_dir / p.name
-    if candidate.exists():
+    if candidate.is_file():
         return candidate.name, candidate
 
     available = sorted(f.name for f in plans_dir.glob("*.md")) if plans_dir.exists() else []
@@ -265,6 +267,44 @@ def slug_to_title(slug: str) -> str:
     return slug.replace("-", " ").title()
 
 
+def require_project_descendant(path: Path, project_root: Path, label: str) -> None:
+    """Require path to resolve strictly inside project_root.
+
+    Resolving both paths catches an existing symlink that would otherwise
+    redirect writes outside the project boundary.
+    """
+    root_resolved = project_root.resolve()
+    path_resolved = path.resolve(strict=False)
+    if path_resolved == root_resolved or not path_resolved.is_relative_to(root_resolved):
+        sys.exit(
+            f"ERROR: {label} must resolve inside the project root.\n"
+            f"  Project root: {root_resolved}\n"
+            f"  Resolved path: {path_resolved}"
+        )
+
+
+def resolve_tracker_dir(project_root: Path, dirname_arg: str) -> tuple[Path, str]:
+    """Validate and resolve a project-relative tracker directory.
+
+    Hidden and nested paths are allowed (for example, `.progress` and
+    `docs/progress`). Absolute paths, the project root itself, parent
+    traversal, and symlink escapes are rejected.
+    """
+    relative = Path(dirname_arg).expanduser()
+    if relative.is_absolute():
+        sys.exit(f"ERROR: --dir must be relative to the project root: {dirname_arg!r}")
+    if relative == Path(".") or ".." in relative.parts:
+        sys.exit(
+            f"ERROR: --dir must name a directory inside the project root "
+            f"(not '.' or a path containing '..'): {dirname_arg!r}"
+        )
+
+    normalized = relative.as_posix()
+    tracker_dir = project_root / relative
+    require_project_descendant(tracker_dir, project_root, "tracker directory")
+    return tracker_dir, normalized
+
+
 def render_scope_rows(entries: list[ScopeEntry]) -> str:
     """Render the per-scope table rows for the ## Scope section."""
     lines: list[str] = []
@@ -298,6 +338,28 @@ def render_template(
     )
 
 
+def scaffold_seeds(tracker_dir: Path) -> list[tuple[Path, Path]]:
+    """Return bundled source/destination pairs for tracker support files."""
+    return [
+        (REFERENCES_DIR / "tracker-readme.md", tracker_dir / "README.md"),
+        (REFERENCES_DIR / "INDEX.template.md", tracker_dir / "INDEX.md"),
+        (REFERENCES_DIR / "PROGRESS.template.md", tracker_dir / "_template" / "PROGRESS.md"),
+        (REFERENCES_DIR / "plans-readme.md", tracker_dir / "_plans" / "README.md"),
+    ]
+
+
+def validate_scaffold(tracker_dir: Path, project_root: Path) -> None:
+    """Validate every scaffold source and destination before any writes."""
+    for source, dest in scaffold_seeds(tracker_dir):
+        require_project_descendant(dest, project_root, f"scaffold destination {dest}")
+        if dest.is_symlink() and not dest.exists():
+            sys.exit(f"ERROR: scaffold destination is a broken symlink: {dest}")
+        if dest.exists() and not dest.is_file():
+            sys.exit(f"ERROR: scaffold destination exists but is not a file: {dest}")
+        if not dest.exists() and not source.is_file():
+            sys.exit(f"ERROR: bundled reference not found: {source}")
+
+
 def scaffold_tracker_dir(tracker_dir: Path, dry_run: bool) -> None:
     """Create the tracker directory's supporting files on first use.
 
@@ -305,17 +367,9 @@ def scaffold_tracker_dir(tracker_dir: Path, dry_run: bool) -> None:
     from this skill's bundled references/ when they don't already exist.
     Never overwrites existing files.
     """
-    seeds = [
-        (REFERENCES_DIR / "tracker-readme.md", tracker_dir / "README.md"),
-        (REFERENCES_DIR / "INDEX.template.md", tracker_dir / "INDEX.md"),
-        (REFERENCES_DIR / "PROGRESS.template.md", tracker_dir / "_template" / "PROGRESS.md"),
-        (REFERENCES_DIR / "plans-readme.md", tracker_dir / "_plans" / "README.md"),
-    ]
-    for source, dest in seeds:
+    for source, dest in scaffold_seeds(tracker_dir):
         if dest.exists():
             continue
-        if not source.exists():
-            sys.exit(f"ERROR: bundled reference not found: {source}")
         if dry_run:
             print(f"[dry-run] Would scaffold: {dest}")
         else:
@@ -324,7 +378,8 @@ def scaffold_tracker_dir(tracker_dir: Path, dry_run: bool) -> None:
             print(f"Scaffolded: {dest}")
 
 
-def append_index_row(
+def render_index_update(
+    index: str,
     index_path: Path,
     tracker_dirname: str,
     folder_name: str,
@@ -333,9 +388,8 @@ def append_index_row(
     ticket: str,
     plan_name: str,
     today: str,
-    dry_run: bool,
-) -> None:
-    index = index_path.read_text(encoding="utf-8")
+) -> tuple[str, str]:
+    """Return the updated INDEX content and newly rendered row."""
 
     header_idx = index.find(TABLE_HEADER_MARKER)
     if header_idx == -1:
@@ -344,9 +398,15 @@ def append_index_row(
             f"Expected to find: {TABLE_HEADER_MARKER!r}"
         )
 
-    # Skip past the header line and separator line to reach the first data row position
-    after_header = index.find("\n", header_idx) + 1       # end of header line
-    separator_end = index.find("\n", after_header) + 1    # end of separator line
+    # Skip past the header line and separator line to reach the first data row position.
+    header_end = index.find("\n", header_idx)
+    if header_end == -1:
+        sys.exit(f"ERROR: Malformed item table in {index_path}: header has no separator row")
+    after_header = header_end + 1
+    separator_line_end = index.find("\n", after_header)
+    if separator_line_end == -1 or not index[after_header:separator_line_end].startswith("|---"):
+        sys.exit(f"ERROR: Malformed item table in {index_path}: separator row is missing")
+    separator_end = separator_line_end + 1
 
     # Walk forward over all existing data rows (lines starting with "|")
     table_end = separator_end
@@ -376,12 +436,7 @@ def append_index_row(
 
     updated = index[:table_end] + new_row + index[table_end:]
 
-    if dry_run:
-        print(f"[dry-run] Would append to {index_path}:")
-        print(f"  {new_row.strip()}")
-    else:
-        index_path.write_text(updated, encoding="utf-8")
-        print(f"Updated:  {index_path}")
+    return updated, new_row
 
 
 # ---------------------------------------------------------------------------
@@ -390,15 +445,16 @@ def append_index_row(
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    script_display = f"{SCRIPT_DIR}/new_progress.py"
     parser = argparse.ArgumentParser(
         description="Create a new development progress item under a project's progress tracker.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  uv run new_progress.py subscription-refund \\\n"
+            f"  uv run {script_display} subscription-refund \\\n"
             '      --scope "api:feature/refund:JIRA-111,worker:feature/refund" \\\n'
             "      --ticket EPIC-100 --plan ./my-plan.md --title 'Refund flow rework'\n\n"
-            "  uv run new_progress.py my-task --scope api --dry-run"
+            f"  uv run {script_display} my-task --scope api --dry-run"
         ),
     )
     parser.add_argument(
@@ -448,7 +504,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="DIRNAME",
         help=(
-            "Tracker directory name, relative to the project root. "
+            "Tracker directory path, relative to and strictly inside the project root. "
+            "Nested paths and dot-directories are allowed; absolute paths, '.', '..', "
+            "and symlink escapes are rejected. "
             "Defaults to $PROGRESS_TRACKER_DIR, then 'progress'."
         ),
     )
@@ -489,34 +547,66 @@ def main() -> None:
     plan_name, source_path = resolve_plan(args.plan)
 
     project_root = resolve_project_root(args.root)
-    dirname = args.dir or os.environ.get("PROGRESS_TRACKER_DIR") or DEFAULT_TRACKER_DIRNAME
-    tracker_dir = project_root / dirname
+    dirname_arg = args.dir or os.environ.get("PROGRESS_TRACKER_DIR") or DEFAULT_TRACKER_DIRNAME
+    tracker_dir, dirname = resolve_tracker_dir(project_root, dirname_arg)
     template_path = tracker_dir / "_template" / "PROGRESS.md"
     index_path = tracker_dir / "INDEX.md"
     plans_local_dir = tracker_dir / "_plans"
-
-    # --- Scaffold tracker dir on first use ---
-    scaffold_tracker_dir(tracker_dir, dry_run)
-    # In dry-run mode the scaffold files may not actually exist yet; use the
-    # bundled reference directly so the preview can still render.
-    if dry_run and not template_path.exists():
-        template_path = REFERENCES_DIR / "PROGRESS.template.md"
-    if dry_run and not index_path.exists():
-        index_path = REFERENCES_DIR / "INDEX.template.md"
 
     # --- Build output path ---
     folder_name = f"{today}-{slug}"
     item_dir = tracker_dir / folder_name
     progress_file = item_dir / "PROGRESS.md"
 
-    if item_dir.exists():
+    # --- Preflight every predictable failure before writing anything ---
+    validate_scaffold(tracker_dir, project_root)
+    for output_path, label in (
+        (index_path, "INDEX.md"),
+        (plans_local_dir, "plan snapshot directory"),
+        (item_dir, "progress item directory"),
+        (progress_file, "PROGRESS.md"),
+    ):
+        require_project_descendant(output_path, project_root, label)
+
+    if item_dir.exists() or item_dir.is_symlink():
         sys.exit(
             f"ERROR: Directory already exists: {item_dir}\n"
             f"To avoid overwriting, this script will not proceed. "
             f"Choose a different slug or rename the existing folder."
         )
 
-    rendered = render_template(template_path, title, slug, scope_entries, ticket, plan_name, today)
+    if source_path:
+        plan_dest = plans_local_dir / plan_name
+        require_project_descendant(plan_dest, project_root, "plan snapshot")
+        if plan_dest.exists() or plan_dest.is_symlink():
+            sys.exit(
+                f"ERROR: plan snapshot already exists: {plan_dest}\n"
+                f"To avoid overwriting an existing snapshot, this script will not proceed. "
+                f"Remove the file manually if you intend to replace it."
+            )
+
+    template_source = (
+        template_path if template_path.is_file() else REFERENCES_DIR / "PROGRESS.template.md"
+    )
+    index_source = index_path if index_path.is_file() else REFERENCES_DIR / "INDEX.template.md"
+    rendered = render_template(
+        template_source, title, slug, scope_entries, ticket, plan_name, today
+    )
+    index_content = index_source.read_text(encoding="utf-8")
+    updated_index, new_index_row = render_index_update(
+        index_content,
+        index_path,
+        dirname,
+        folder_name,
+        title,
+        scope_entries,
+        ticket,
+        plan_name,
+        today,
+    )
+
+    # --- Scaffold tracker dir on first use, after preflight succeeds ---
+    scaffold_tracker_dir(tracker_dir, dry_run)
 
     # --- Preview or write ---
     if dry_run:
@@ -538,9 +628,12 @@ def main() -> None:
     if source_path:
         copy_plan(source_path, plan_name, plans_local_dir, dry_run)
 
-    append_index_row(
-        index_path, dirname, folder_name, title, scope_entries, ticket, plan_name, today, dry_run
-    )
+    if dry_run:
+        print(f"[dry-run] Would append to {index_path}:")
+        print(f"  {new_index_row.strip()}")
+    else:
+        index_path.write_text(updated_index, encoding="utf-8")
+        print(f"Updated:  {index_path}")
 
     if not dry_run:
         print()
@@ -548,8 +641,8 @@ def main() -> None:
         print(f"  1. Open {progress_file}")
         print("     → Fill in Background & goals and Task list")
         print("  2. Back-fill TBD values in ## Scope as branches/tickets are created")
-        print(f"  3. Update Status to `in-progress` in {index_path} when work begins")
-        print("  4. After completing, fill in ## Outcome and update Status to `done` in INDEX.md")
+        print("  3. When status changes, update it in both PROGRESS.md and INDEX.md")
+        print("  4. After completing, fill in ## Outcome and set both statuses to `done`")
 
 
 if __name__ == "__main__":

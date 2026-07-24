@@ -1,0 +1,13 @@
+{
+  "description": "A tracker directory that escapes the project root is rejected without writing inside or outside the repository.",
+  "steps": [
+    {"type": "run_expect_fail", "args": ["escape-task", "--scope", "api", "--dir", "../progress-tracker-escape-target"], "expect_stderr_contains": "--dir"}
+  ],
+  "checks": {
+    "files_absent": [
+      "progress",
+      "*-escape-task",
+      "../progress-tracker-escape-target"
+    ]
+  }
+}

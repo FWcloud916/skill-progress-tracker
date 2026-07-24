@@ -20,12 +20,15 @@ decision — nothing here is deleted automatically.
 
 **Using the scaffold script (recommended):**
 
+Resolve `<skill-dir>` to the installed `progress-tracker` skill directory
+(the directory containing its `SKILL.md`), then run:
+
 ```bash
 # Minimal — one scope entry
-uv run new_progress.py <slug> --scope api
+uv run <skill-dir>/scripts/new_progress.py <slug> --scope api
 
 # Full — per-entry branch and ticket; --ticket is the umbrella reference
-uv run new_progress.py <slug> \
+uv run <skill-dir>/scripts/new_progress.py <slug> \
   --scope "api:feature/my-branch:JIRA-111,worker:feature/my-branch" \
   --ticket EPIC-100 \
   [--plan <path>] \
@@ -43,8 +46,8 @@ entries; branch and ticket default to `TBD` when omitted. The script creates
 2. Replace every `{{PLACEHOLDER}}`
 3. Add a row to the [`INDEX.md`](INDEX.md) table manually
 
-See the skill's `references/workflow.md` for the full spec. Item list:
-[`INDEX.md`](INDEX.md).
+Invoke the installed `progress-tracker` skill for the full workflow. Item
+list: [`INDEX.md`](INDEX.md).
 
 ## Cleanup policy
 
