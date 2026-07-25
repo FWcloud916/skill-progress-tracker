@@ -7,20 +7,17 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.14"]
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
 
-      - name: Install test Python
-        run: uv python install ${{ matrix.python-version }}
+      - name: Install Python 3.14
+        run: uv python install 3.14
 
-      - name: Python compatibility tests
-        run: uv run --python ${{ matrix.python-version }} --with pytest python -m pytest skills/progress-tracker/scripts/ -q
+      - name: Python tests
+        run: uv run --python 3.14 --with pytest python -m pytest skills/progress-tracker/scripts/ -q
 
       - name: Install ruff
         run: uv tool install ruff==0.16.0

@@ -200,3 +200,38 @@ Only after both gates pass does the agent ask whether to delete the original
 tracking artifacts. Approval must identify the exact legacy target. Deletion
 is followed by the same consistency and pointer/link audits; declining keeps
 the source as a legacy record while live pointers remain on the new tracker.
+
+## 2026-07-26 — Standardize on a single supported Python version (3.14)
+
+Supersedes the dual-version part of "2026-07-24 — Support Python 3.10 as the
+real language floor". The maintainer chose to keep exactly one supported
+Python version instead of a 3.10 floor plus a 3.10/3.14 CI matrix. 3.14 is
+the newest stable release (3.15 is not released as of this writing), so
+`requires-python = ">=3.14"` in both scripts' PEP 723 metadata, a single
+CI job on 3.14, and a `verify.sh` check that all of these declarations name
+the same version.
+
+The trigger was a real gate failure: on a stock macOS machine, `verify.sh`'s
+end-to-end scenario check failed 9/9 because `run_scenarios.py` executed the
+scripts under test with `sys.executable` — the system `python3` (3.9.6) that
+had launched the harness — ignoring the scripts' declared floor entirely.
+`new_progress.py`'s `str | None` annotations then raised a def-time
+`TypeError` (it lacked the `from __future__ import annotations` its sibling
+`update_progress.py` already had). CI stayed green because ubuntu runners
+satisfied the floor — the same environment-drift trap as the 2026-07-24 ruff
+incident, in the opposite direction.
+
+Fixes, in order of importance:
+1. `run_scenarios.py` now executes the scripts under test with
+   `uv run --quiet`, which reads PEP 723 and provisions the declared Python;
+   without uv it falls back to the current interpreter only when that
+   interpreter satisfies the floor, and exits with a clear error otherwise.
+   The scenario harness itself (like the grader) stays runnable on any
+   modern system `python3`.
+2. `new_progress.py` gained `from __future__ import annotations` for parity
+   with `update_progress.py` — defense in depth so a bare `python3` run on an
+   old interpreter reaches argparse and real error messages instead of a
+   def-time `TypeError`.
+3. `verify.sh` pins the pytest step to `--python 3.14` and asserts the
+   version declarations agree across both scripts and CI, so a future bump
+   must change them together.

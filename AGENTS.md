@@ -68,7 +68,7 @@ single-line edits) can skip; do not pre-load all docs.
 
 ```bash
 bash scripts/verify.sh                                                          # consistency gate — the verification gate for "done"
-uv run --with pytest python3 -m pytest skills/progress-tracker/scripts/ -v      # unit + integration tests for the scaffold script
+uv run --python 3.14 --with pytest python3 -m pytest skills/progress-tracker/scripts/ -v  # unit + integration tests for the scaffold script
 ./evals/scripts/run_scenarios.sh                                                 # end-to-end lifecycle scenarios
 python3 evals/scripts/test_grade_scenarios.py                                    # free scenario-grader regression tests
 ```

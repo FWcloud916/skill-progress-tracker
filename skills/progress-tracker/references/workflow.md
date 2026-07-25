@@ -32,7 +32,7 @@ across sessions and machines.
 
 - **uv** (recommended): `uv run` installs Python automatically and reads the
   PEP 723 inline metadata, no manual pip needed.
-- Or: Python 3.10+ (pure stdlib, no third-party dependencies), run directly
+- Or: Python 3.14+ (pure stdlib, no third-party dependencies), run directly
   with `python3 new_progress.py`.
 
 ---
