@@ -9,7 +9,7 @@ workflow.
 
 | Status | Item | Folder | Scope | Ticket | Plan | Created | Notes |
 |---|---|---|---|---|---|---|---|
-| `in-progress` | Progress Tracker Improvements | `progress/2026-07-24-progress-tracker-improvements/` | `progress-tracker` | N/A | _plans/progress-tracker-improvements-plan.md | 2026-07-24 | P0 verification truthfulness; P1 lifecycle automation and input hardening |
+| `done` | Progress Tracker Improvements | `progress/2026-07-24-progress-tracker-improvements/` | `progress-tracker` | N/A | _plans/progress-tracker-improvements-plan.md | 2026-07-24 | P0 verification truthfulness; P1 lifecycle automation and input hardening |
 
 ## Status legend
 

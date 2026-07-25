@@ -1,7 +1,7 @@
 # Progress Tracker Improvements
 
 **Slug:** progress-tracker-improvements
-**Status:** in-progress
+**Status:** done
 **Ticket:** N/A
 **Related plan:** ../_plans/progress-tracker-improvements-plan.md
 **Created:** 2026-07-24
@@ -72,11 +72,16 @@ The frozen implementation plan is recorded in
   Python compatibility, and namespaced plan snapshots.
 - Final verification passed on Python 3.10 and 3.14 with 105 tests each, 9
   lifecycle scenarios, the repository consistency gate, and Ruff 0.16.0.
+- Merged the verified feature branch into local `main` with a no-fast-forward
+  merge commit.
+- Closed item as `done`.
 
 ## Outcome
 
-> Fill in after development finishes.
+Implemented and verified lifecycle automation, input hardening, portable
+runtime support, namespaced plan snapshots, and truthful end-to-end
+verification; merged into local `main` with `--no-ff`.
 
-**Final status:**
-**PR / Commit:**
-**Follow-ups:**
+**Final status:** done
+**PR / Commit:** `0da90fe`
+**Follow-ups:** Push local main to origin.
