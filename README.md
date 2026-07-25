@@ -10,6 +10,11 @@ several — for any project.
   `progress/` directory (configurable) with a filled-in `PROGRESS.md`, and
   appends a row to `INDEX.md`. First use in a project auto-scaffolds the
   tracker directory's supporting files.
+- **Migration guard** — before first use, inventories existing tracking
+  documents and their pointers, asks whether to migrate, copies all in-progress
+  content, then compares source and destination and verifies every old path/name
+  and changed link. Only after clean audits does it ask whether to delete the
+  original, followed by another audit if deletion is approved.
 - **Multi-scope, tool-agnostic** — `--scope name[:branch[:ticket]]` accepts
   any free-form label (a service, a package, a sibling repo — not validated
   against a directory) and any ticket format (serial, `#123`, `JIRA-111`, a

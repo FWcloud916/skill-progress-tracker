@@ -48,6 +48,12 @@
     "reason": "Non-English phrasing of the same lifecycle-tracking request still triggers."
   },
   {
+    "id": "migrate-existing-tracker",
+    "prompt": "Adopt progress-tracker in this repo; it already has a root PROGRESS.md. Ask whether to migrate, copy its active work, compare both records, audit references, then ask whether to delete the original.",
+    "expected": "progress-tracker",
+    "reason": "Adoption with another tracking document requires consent, active-content migration, a two-sided consistency audit, a pointer audit, and a separate post-audit deletion decision."
+  },
+  {
     "id": "one-off-question",
     "prompt": "What does this function do?",
     "expected": "not-progress-tracker",

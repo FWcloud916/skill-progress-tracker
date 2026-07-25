@@ -29,7 +29,7 @@ evals/
 ├── README.md                  # this file
 ├── scenarios/                 # 9 disposable-repo lifecycle scenarios
 │   └── */scenario.json        # steps (run/write/edit) + deterministic checks
-├── trigger-matrix.json        # 8 positive + 4 negative/boundary prompts
+├── trigger-matrix.json        # 9 positive + 4 negative/boundary prompts
 └── scripts/
     ├── run_scenarios.py       # runs each scenario's steps against a disposable git repo
     ├── run_scenarios.sh       # thin bash entry point → run_scenarios.py
@@ -93,10 +93,13 @@ Both are free and fast (no API key, no network) — they run on every
 `progress-tracker` or `not-progress-tracker`, including the boundary against
 doc-architect's `PROGRESS.md` harness module (a single repo-root
 agent-resume file — a different concept from this skill's multi-item dated
-journal under `progress/`). `scripts/verify.sh` checks its shape and that
-every case has a non-empty prompt and reason. It is a review contract, not a
-live-eval — proving metadata-only trigger selection would require running
-the surrounding skill catalog, which is out of scope here.
+journal under `progress/`) and adoption requests where that existing harness
+must trigger migration consent, active-content copying, a two-sided consistency
+audit, a pointer audit, and a separate deletion decision. `scripts/verify.sh`
+checks its shape and that every case has a non-empty prompt and reason. It is a
+review contract, not a live-eval — proving metadata-only trigger selection
+would require running the surrounding skill catalog, which is out of scope
+here.
 
 ## Known limits
 

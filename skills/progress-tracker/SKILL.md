@@ -6,8 +6,9 @@ description: >-
   development task that runs a full lifecycle (investigate → fix → test →
   PR/MR), whether it touches one scope (service, package, repo) or spans
   several — and wants a progress record; (2) the user asks to create,
-  update, audit/check, or close out a progress item; (3) the user explicitly invokes
-  /progress-tracker. Do NOT trigger for genuine one-off questions or trivial
+  update, audit/check, close out, or migrate a progress item or existing local
+  tracking documents; (3) the user explicitly invokes /progress-tracker. Do
+  NOT trigger for genuine one-off questions or trivial
   edits with no lifecycle to track (a typo fix, a config tweak, answering a
   question) — a single-scope bug fix that goes through investigate/fix/test/PR
   still qualifies for (1).
@@ -28,6 +29,55 @@ Template:  `<tracker-dir>/_template/PROGRESS.md`
 > workspace-specific `progress-note` skill instead — it wires into that
 > workspace's ticket system and multi-service layout. This skill is the
 > generic, workspace-independent sibling for any other project.
+
+---
+
+## Before creating anything: existing-tracker preflight
+
+Before running `new_progress.py` or writing tracker files, inspect the target
+project for existing progress-tracking artifacts and the documents that point
+to them. Check likely artifacts such as root-level `PROGRESS.md`,
+`progress_note/`, `progress-notes/`, `WORKLOG.md`, and any tracking path named
+in `AGENTS.md`, `README.md`, or project docs. Judge by content, not filename
+alone. An existing `<tracker-dir>/INDEX.md` with this skill's structure is an
+already-adopted tracker, not a migration candidate.
+
+If a separate tracking mechanism exists:
+
+1. **Do not scaffold or mutate anything yet.** Show the user the artifacts and
+   the documents/scripts that reference them.
+2. **Ask whether to migrate.** An explicit answer is required; silence is not
+   consent. If the user declines, preserve the existing mechanism and do not
+   create a second tracker unless they explicitly choose coexistence.
+3. If approved, agree on a source-to-destination map before editing. Copy all
+   **in-progress content** into the new item(s): current status, scope,
+   branches/tickets/plans, goals, unfinished tasks, current work log, blockers,
+   next actions, and live references. Do not invent missing facts. Keep the
+   source unchanged during migration and audit.
+4. Audit source and destination side by side. For every active source field,
+   record its destination and verify semantic equivalence; explicitly document
+   any mapping into this skill's canonical status or field structure. A
+   migration with missing or unexplained active content fails.
+5. Update every live pointer to the old mechanism, including Markdown links,
+   path mentions, agent instructions, command examples, scripts, and
+   configuration.
+6. Run `update_progress.py check`, search the whole project for every old path
+   or filename, and inspect all changed links. Migration is complete only when
+   the content comparison and pointer audit both pass, every remaining match is
+   an intentional historical/compatibility reference, and every changed
+   relative link resolves.
+7. Only after that clean audit, show the results and ask whether to delete the
+   original tracking artifacts. Do not infer consent. If deletion is approved,
+   remove only the confirmed legacy targets, update any resulting pointers,
+   then rerun the consistency, old-reference, and link audits. If declined,
+   retain the originals as legacy records and keep live pointers on the new
+   tracker.
+
+Report the active-content mapping, two-sided consistency result, pointer files
+updated, intentional legacy references, and the user's source-retention choice.
+Use a comparison table with `Source artifact/field`, `Source value summary`,
+`Destination item/section`, and `Result`; every row MUST pass before asking
+about deletion.
 
 ---
 
@@ -190,6 +240,7 @@ close-out.
 
 ## Cleanup
 
-**Never delete tracker-directory items automatically.** Deleting folders and
-removing rows from `INDEX.md` is a manual human decision. Only update status
-fields; do not remove content.
+**Never delete current tracker items automatically.** Deleting current item
+folders or removing rows from `INDEX.md` is a manual human decision. A legacy
+source may be deleted only after migration audits pass and the user explicitly
+confirms the exact source target; rerun all audits afterward.

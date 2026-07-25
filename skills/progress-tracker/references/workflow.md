@@ -2,7 +2,7 @@
 
 > **Type:** How-to
 > **Audience:** Developers, AI assistants
-> **Last updated:** 2026-07-24
+> **Last updated:** 2026-07-26
 >
 > This document explains the **workflow and purpose** of the progress tracker
 > (why, folder structure, field semantics, cleanup policy). The single
@@ -34,6 +34,50 @@ across sessions and machines.
   PEP 723 inline metadata, no manual pip needed.
 - Or: Python 3.10+ (pure stdlib, no third-party dependencies), run directly
   with `python3 new_progress.py`.
+
+---
+
+## Existing-tracker discovery and migration
+
+Before first use, the agent **MUST** inspect the project for an existing local
+tracking mechanism and for project documents, agent instructions, scripts, or
+configuration that point to it. Likely names include root-level `PROGRESS.md`,
+`progress_note/`, `progress-notes/`, and `WORKLOG.md`, but content and documented
+purpose determine whether an artifact is a tracker. A tracker already using
+this skill's `<tracker-dir>/INDEX.md` structure is not a migration candidate.
+
+When a separate mechanism exists, the agent **MUST NOT** scaffold a parallel
+tracker without first showing the discovered artifacts and asking whether the
+user wants to migrate. Migration requires explicit approval. A declined
+migration preserves the existing mechanism; coexistence also requires an
+explicit user choice.
+
+An approved migration follows this contract:
+
+1. Inventory source artifacts and all live pointers to them.
+2. Agree on a source-to-destination mapping; do not infer missing task facts.
+3. Keep the source unchanged and copy every in-progress concern into the new
+   item(s): current status, scope, branch/ticket/plan references, goals,
+   unfinished tasks, current work log, blockers, next actions, and live links.
+4. Compare source and destination field by field. Record each active source
+   field's destination, verify semantic equivalence, and explain mappings into
+   the canonical status or field structure. Missing or unexplained active
+   content fails the audit.
+5. Update every live pointer: links, path mentions, agent instructions, command
+   examples, scripts, and configuration.
+6. Run `update_progress.py check`, search the project for each old path/name,
+   and verify every changed relative link resolves. Classify any remaining
+   match as an intentional historical/compatibility reference.
+7. Only when both the content comparison and pointer audit pass, show the audit
+   and ask whether to delete the original artifacts. If approved, remove only
+   the exact confirmed legacy targets, update affected pointers, and rerun all
+   three audits. If declined, retain the originals as legacy records while live
+   pointers continue to target the new tracker.
+
+The migration is not complete while active content is missing, the two records
+disagree, or an unreviewed stale pointer remains. The final report lists the
+active-content mapping, two-sided comparison, updated pointer files,
+intentional legacy references, and source-retention choice.
 
 ---
 
@@ -189,10 +233,12 @@ its own.
 
 ## Cleanup policy
 
-- Scripts and AI agents **MUST NOT** proactively delete any folder or file
-  under the tracker directory.
-- Cleanup (deleting folders, removing INDEX rows) is a **human decision**,
-  performed manually as needed.
+- Scripts and AI agents **MUST NOT** proactively delete current item folders or
+  INDEX rows.
+- A migrated legacy source MAY be deleted only after all migration audits pass
+  and the user explicitly confirms the exact target. The agent MUST rerun the
+  consistency and pointer/link audits after deletion.
+- Other cleanup remains a **human decision**, performed manually as needed.
 - Consider keeping `done` / `abandoned` items around for at least one sprint
   for later reference and retrospectives.
 
@@ -202,6 +248,11 @@ its own.
 
 ✅ **Do**
 
+- Discover existing tracking artifacts and ask before migrating or scaffolding
+  a parallel tracker
+- Copy every in-progress concern, then compare the source and destination
+  before changing or deleting the source
+- Audit every old path/name and changed link after an approved migration
 - Preview with `--dry-run` before creating a task
 - Include **every scope entry involved** in `--scope`, even read-only ones
 - Fill in `TBD` for branch/ticket before they exist, then back-fill `## Scope` once known
@@ -214,6 +265,9 @@ its own.
 
 ❌ **Don't**
 
+- Don't treat silence as migration consent or leave stale pointers to the old
+  tracking mechanism
+- Don't ask to delete the source until the content and pointer audits both pass
 - Don't delete tracker-directory folders directly (update the INDEX status to
   `abandoned` first, then clean up manually)
 - Don't fill real content into `_template/PROGRESS.md` (the template should

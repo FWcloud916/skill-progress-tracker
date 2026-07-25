@@ -2,7 +2,7 @@
 
 > **Type:** Reference
 > **Audience:** Maintainers, AI agents
-> **Last updated:** 2026-07-25
+> **Last updated:** 2026-07-26
 
 A decision log with rationale, in chronological order. When a design choice
 seems arbitrary, check here before changing it.
@@ -172,3 +172,31 @@ bundled seed availability, output-path containment, template rendering, and
 the INDEX insertion marker. This guarantees that a validation error cannot
 leave an orphan `PROGRESS.md`, plan snapshot, or INDEX row. It is not a
 multi-file transaction against process crashes or storage failures.
+
+## 2026-07-26 — Require consent and a pointer audit before legacy-tracker migration
+
+Projects may already use a root `PROGRESS.md`, a differently named tracking
+directory, or instructions that point agents to another state file. Silently
+scaffolding `progress/` in that situation creates competing sources of truth,
+as the real-world trial against `FWcloud916.github.io` demonstrated.
+
+Existing-tracker discovery therefore lives in the agent workflow before the
+deterministic scaffold command. Artifact names and migration mappings vary too
+widely for `new_progress.py` to guess safely. When a separate mechanism is
+found, the agent must inventory it and its pointers, obtain explicit migration
+or coexistence consent, and preserve the source unless removal is separately
+approved.
+
+Migration completion has two independent gates. First, copy all in-progress
+state while keeping the source unchanged, then compare every active source
+field with its destination and explain canonical status/field mappings. Second,
+run the tracker consistency check, search the project for every old path/name,
+inspect changed relative links, and classify any remaining occurrence as
+intentionally historical or compatibility-related. Missing active content, a
+semantic mismatch, or an unreviewed stale pointer means migration is
+incomplete.
+
+Only after both gates pass does the agent ask whether to delete the original
+tracking artifacts. Approval must identify the exact legacy target. Deletion
+is followed by the same consistency and pointer/link audits; declining keeps
+the source as a legacy record while live pointers remain on the new tracker.
