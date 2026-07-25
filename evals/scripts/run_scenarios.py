@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Run progress-tracker's end-to-end lifecycle scenarios in disposable repos.
 
-No model/LLM call is involved — new_progress.py is a deterministic script, so
-each scenario runs it directly (plus scripted file edits standing in for the
-manual editing steps SKILL.md describes for "during work" / "after
-completing work"), then grades the result. See evals/README.md.
+No model/LLM call is involved — the creation and lifecycle scripts are
+deterministic, so each scenario runs them directly and grades the resulting
+filesystem state. See evals/README.md.
 
 Usage:
     python3 run_scenarios.py                  # all scenarios
@@ -22,7 +21,18 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS_DIR = REPO_ROOT / "evals" / "scenarios"
 NEW_PROGRESS_SCRIPT = REPO_ROOT / "skills" / "progress-tracker" / "scripts" / "new_progress.py"
+UPDATE_PROGRESS_SCRIPT = (
+    REPO_ROOT / "skills" / "progress-tracker" / "scripts" / "update_progress.py"
+)
 GRADE_SCRIPT = REPO_ROOT / "evals" / "scripts" / "grade_scenarios.py"
+
+
+def step_script(step: dict) -> Path:
+    scripts = {"new": NEW_PROGRESS_SCRIPT, "update": UPDATE_PROGRESS_SCRIPT}
+    name = step.get("script", "new")
+    if name not in scripts:
+        raise RuntimeError(f"unknown script selector: {name!r}")
+    return scripts[name]
 
 
 def init_git_repo(path: Path) -> None:
@@ -34,8 +44,9 @@ def init_git_repo(path: Path) -> None:
 def run_step(step: dict, repo_dir: Path) -> None:
     kind = step["type"]
     if kind == "run":
+        script = step_script(step)
         result = subprocess.run(
-            [sys.executable, str(NEW_PROGRESS_SCRIPT), *step["args"]],
+            [sys.executable, str(script), *step["args"]],
             cwd=repo_dir,
             capture_output=True,
             text=True,
@@ -46,8 +57,9 @@ def run_step(step: dict, repo_dir: Path) -> None:
                 f"step 'run' {step['args']} failed unexpectedly:\n{result.stderr}"
             )
     elif kind == "run_expect_fail":
+        script = step_script(step)
         result = subprocess.run(
-            [sys.executable, str(NEW_PROGRESS_SCRIPT), *step["args"]],
+            [sys.executable, str(script), *step["args"]],
             cwd=repo_dir,
             capture_output=True,
             text=True,

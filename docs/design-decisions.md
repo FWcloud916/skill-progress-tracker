@@ -2,12 +2,63 @@
 
 > **Type:** Reference
 > **Audience:** Maintainers, AI agents
-> **Last updated:** 2026-07-24
+> **Last updated:** 2026-07-25
 
 A decision log with rationale, in chronological order. When a design choice
 seems arbitrary, check here before changing it.
 
 ---
+
+## 2026-07-24 — Add a separate lifecycle mutation and audit script
+
+`new_progress.py` remains a backward-compatible creation command. Update,
+close-out, and consistency checking live in `update_progress.py` instead of
+turning the established positional create CLI into a subcommand interface.
+This follows the repository's enhance-over-rewrite convention while removing
+the riskiest manual step: editing status independently in `PROGRESS.md` and
+`INDEX.md`.
+
+The lifecycle script discovers items by their stable `**Slug:**` field,
+requires exactly one matching item and INDEX row, rejects existing drift,
+validates transitions before writing, and provides dry-run diffs. Its `check`
+command audits invalid statuses, duplicate slugs/rows, missing rows, stale
+rows, and status drift. Writes are validation-atomic and use best-effort
+rollback for ordinary filesystem errors; they are not a cross-file
+transaction against process or machine crashes.
+
+Allowed transitions reflect normal review rework and explicit termination:
+`planning → in-progress`, `in-progress ⇄ review`,
+`in-progress ⇄ blocked`, and any non-terminal status → `abandoned`.
+
+## 2026-07-24 — Escape scope delimiters and Markdown table values
+
+Scope labels remain free-form and filesystem-independent. The compact legacy
+syntax stays compatible, with backslash escaping added for literal commas,
+colons, and backslashes. The first two unescaped colons delimit fields and an
+unescaped comma delimits scope entries.
+
+All CLI values written into Markdown tables are now rendered through shared
+helpers. Pipes and backslashes are escaped, code spans choose a delimiter that
+can contain literal backticks, and embedded newlines are rejected. Ticket
+values remain semantically verbatim: the script still does not normalize or
+invent tracker syntax; Markdown escaping only protects the output structure.
+
+## 2026-07-24 — Namespace plan snapshots by task slug
+
+The original basename-only `_plans/<plan-name>` layout made common names such
+as `plan.md` collide across unrelated tasks. Snapshots now use
+`_plans/<slug>-<plan-name>` and are rendered as explicit URL-encoded relative
+Markdown links. Existing tracker records remain readable because the lifecycle
+script follows the paths already recorded in each item and does not migrate or
+rename historical snapshots.
+
+## 2026-07-24 — Support Python 3.10 as the real language floor
+
+The scripts use Python 3.10 syntax (`X | None`) but no Python 3.14-only
+language or standard-library behavior. Requiring 3.14 forced unnecessary
+runtime downloads and weakened offline portability. PEP 723 metadata now
+declares Python 3.10+, and CI exercises both 3.10 and 3.14 so the documented
+minimum and current runtime remain proven.
 
 ## 2026-07-24 — Pin ruff's version in CI after a false-green local check
 

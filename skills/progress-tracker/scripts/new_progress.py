@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.14"
+# requires-python = ">=3.10"
 # dependencies = []
 # ///
-"""Create a new development progress item under a project's progress tracker.
+r"""Create a new development progress item under a project's progress tracker.
 
 The --scope argument accepts a comma-separated list of `name[:branch[:ticket]]`
 entries, where:
@@ -13,6 +13,10 @@ entries, where:
   - ticket  issue/ticket reference for this scope entry — kept exactly as
             given (serial, #-prefixed, URL, Jira key, anything); optional,
             defaults to TBD
+
+Escape literal delimiters and backslashes in any segment as `\,`, `\:`, and
+`\\`. Unescaped commas separate entries; the first two unescaped colons in an
+entry separate name, branch, and ticket.
 
 Usage:
     uv run <skill-dir>/scripts/new_progress.py <slug> --scope <entries> [options]
@@ -47,7 +51,8 @@ Options:
     --plan        Path to the associated plan file (optional but recommended
                   when a plan exists). The plan is copied into
                   <tracker-dir>/_plans/ as a version-controlled snapshot and
-                  linked via a relative path in PROGRESS.md.
+                  stored as <slug>-<plan-name> and linked via an explicit
+                  relative Markdown link in PROGRESS.md.
                   - A path (absolute, or containing '/', or './'/'../') is
                     validated by existence directly.
                   - A bare filename (e.g. my-plan.md) is resolved against
@@ -70,7 +75,7 @@ Output:
         _template/PROGRESS.md,_plans/README.md} from this skill's bundled
         references, if the tracker directory doesn't exist yet.
     Creates:  <tracker-dir>/YYYY-MM-DD-<slug>/PROGRESS.md
-    Copies:   <tracker-dir>/_plans/<plan-name>.md  (when --plan is given)
+    Copies:   <tracker-dir>/_plans/<slug>-<plan-name>  (when --plan is given)
     Updates:  <tracker-dir>/INDEX.md  (appends a row to the item table)
 """
 
@@ -86,6 +91,7 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
+from urllib.parse import quote
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -152,10 +158,49 @@ def normalize_ticket(value: str, default: str = "N/A") -> str:
     return v if v else default
 
 
+def validate_single_line(value: str, label: str) -> None:
+    """Reject values that would inject additional Markdown lines."""
+    if "\n" in value or "\r" in value:
+        sys.exit(f"ERROR: {label} must be a single line")
+
+
+def markdown_table_text(value: str) -> str:
+    """Escape plain text for a GitHub-flavored Markdown table cell."""
+    validate_single_line(value, "Markdown table value")
+    return value.replace("\\", "\\\\").replace("|", "\\|")
+
+
+def markdown_code(value: str, *, table_cell: bool = False) -> str:
+    """Render a safe inline-code span, including values containing backticks."""
+    validate_single_line(value, "inline-code value")
+    rendered = value.replace("|", "\\|") if table_cell else value
+    longest_run = max((len(run) for run in re.findall(r"`+", rendered)), default=0)
+    delimiter = "`" * (longest_run + 1)
+    padding = " " if longest_run else ""
+    return f"{delimiter}{padding}{rendered}{padding}{delimiter}"
+
+
+def markdown_link(label: str, target: str, *, table_cell: bool = False) -> str:
+    """Render an explicit relative Markdown link with a URL-encoded target."""
+    validate_single_line(label, "link label")
+    validate_single_line(target, "link target")
+    safe_label = label.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+    if table_cell:
+        safe_label = safe_label.replace("|", "\\|")
+    return f"[{safe_label}]({quote(target, safe='/._-')})"
+
+
+def snapshot_plan_name(slug: str, source_name: str) -> str:
+    """Namespace a frozen plan snapshot by task slug to avoid basename collisions."""
+    validate_single_line(source_name, "plan filename")
+    return f"{slug}-{source_name}"
+
+
 def parse_scope(scope_arg: str) -> list[ScopeEntry]:
     """Parse the --scope argument into a list of (name, branch, ticket) tuples.
 
-    Each comma-separated entry has the form:  name[:branch[:ticket]]
+    Each comma-separated entry has the form: name[:branch[:ticket]]. Literal
+    commas, colons, and backslashes can be escaped with a backslash.
 
     Rules:
       - name is a free-form label; not validated against any directory
@@ -163,19 +208,46 @@ def parse_scope(scope_arg: str) -> list[ScopeEntry]:
       - ticket defaults to 'TBD' when omitted; kept verbatim otherwise
     """
     entries: list[ScopeEntry] = []
+    parsed_entries: list[list[str]] = []
+    segments = [""]
+    escaped = False
 
-    for raw in scope_arg.split(","):
-        raw = raw.strip()
-        if not raw:
+    for char in scope_arg:
+        if escaped:
+            if char not in {",", ":", "\\"}:
+                sys.exit(
+                    f"ERROR: unsupported --scope escape \\{char}; "
+                    "only comma, colon, and backslash may be escaped"
+                )
+            segments[-1] += char
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == ",":
+            parsed_entries.append(segments)
+            segments = [""]
+        elif char == ":" and len(segments) < 3:
+            segments.append("")
+        else:
+            segments[-1] += char
+
+    if escaped:
+        sys.exit("ERROR: --scope ends with an incomplete escape (trailing backslash)")
+    parsed_entries.append(segments)
+
+    for segments in parsed_entries:
+        if len(segments) == 1 and not segments[0].strip():
             continue
-        # Split into at most 3 parts on ':'
-        segments = raw.split(":", 2)
         name = segments[0].strip()
         branch = segments[1].strip() if len(segments) > 1 else ""
         ticket_raw = segments[2].strip() if len(segments) > 2 else ""
 
         if not name:
-            sys.exit(f"ERROR: empty scope name in --scope entry: {raw!r}")
+            sys.exit(f"ERROR: empty scope name in --scope entry: {segments!r}")
+
+        validate_single_line(name, "scope name")
+        validate_single_line(branch, "scope branch")
+        validate_single_line(ticket_raw, "scope ticket")
 
         branch = branch if branch else "TBD"
         ticket = normalize_ticket(ticket_raw, default="TBD")
@@ -309,8 +381,10 @@ def render_scope_rows(entries: list[ScopeEntry]) -> str:
     """Render the per-scope table rows for the ## Scope section."""
     lines: list[str] = []
     for name, branch, ticket in entries:
-        branch_cell = f"`{branch}`" if branch != "TBD" else "TBD"
-        lines.append(f"| `{name}` | {branch_cell} | {ticket} |  |")
+        name_cell = markdown_code(name, table_cell=True)
+        branch_cell = markdown_code(branch, table_cell=True) if branch != "TBD" else "TBD"
+        ticket_cell = markdown_table_text(ticket)
+        lines.append(f"| {name_cell} | {branch_cell} | {ticket_cell} |  |")
     return "\n".join(lines)
 
 
@@ -326,7 +400,9 @@ def render_template(
     template = template_path.read_text(encoding="utf-8")
     scope_rows = render_scope_rows(scope_entries)
     # PROGRESS.md lives one level inside the item folder; _plans/ is a sibling.
-    plan_display = f"../_plans/{plan_name}" if plan_name != "N/A" else "N/A"
+    plan_display = (
+        markdown_link(plan_name, f"../_plans/{plan_name}") if plan_name != "N/A" else "N/A"
+    )
     return (
         template
         .replace("{{TITLE}}", title)
@@ -426,12 +502,17 @@ def render_index_update(
         else:
             break
 
-    scope_display = ", ".join(f"`{name}`" for name, _, _ in scope_entries)
+    scope_display = ", ".join(markdown_code(name, table_cell=True) for name, _, _ in scope_entries)
     # INDEX.md lives at the root of the tracker dir; _plans/ is a direct child.
-    plan_display = f"_plans/{plan_name}" if plan_name != "N/A" else "N/A"
+    plan_display = (
+        markdown_link(plan_name, f"_plans/{plan_name}", table_cell=True)
+        if plan_name != "N/A"
+        else "N/A"
+    )
     new_row = (
-        f"| `planning` | {title} | `{tracker_dirname}/{folder_name}/` | "
-        f"{scope_display} | {ticket} | {plan_display} | {today} |  |\n"
+        f"| `planning` | {markdown_table_text(title)} | "
+        f"{markdown_code(f'{tracker_dirname}/{folder_name}/', table_cell=True)} | "
+        f"{scope_display} | {markdown_table_text(ticket)} | {plan_display} | {today} |  |\n"
     )
 
     updated = index[:table_end] + new_row + index[table_end:]
@@ -470,6 +551,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help=(
             "Comma-separated `name[:branch[:ticket]]` entries. "
             "name is a free-form label (service, package, repo — not validated). "
+            "Escape literal commas, colons, and backslashes with a backslash. "
             "branch defaults to TBD when omitted. "
             "ticket defaults to TBD when omitted; kept verbatim otherwise."
         ),
@@ -488,7 +570,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "Path to the associated plan file (optional). A bare filename is "
             "resolved against $PROGRESS_TRACKER_PLANS_DIR if set, else it's an "
             "error — pass a path instead. The plan is copied into "
-            "<tracker-dir>/_plans/ as a version-controlled snapshot."
+            "<tracker-dir>/_plans/ as a slug-namespaced version-controlled snapshot."
         ),
     )
     parser.add_argument(
@@ -540,14 +622,18 @@ def main() -> None:
 
     # --- Validate / parse ---
     validate_slug(slug)
+    validate_single_line(title, "--title")
     scope_entries: list[ScopeEntry] = parse_scope(args.scope)
     ticket: str = normalize_ticket(args.ticket or "", default="N/A")
-    plan_name: str
+    validate_single_line(ticket, "--ticket")
+    source_plan_name: str
     source_path: Path | None
-    plan_name, source_path = resolve_plan(args.plan)
+    source_plan_name, source_path = resolve_plan(args.plan)
+    plan_name = snapshot_plan_name(slug, source_plan_name) if source_path else "N/A"
 
     project_root = resolve_project_root(args.root)
     dirname_arg = args.dir or os.environ.get("PROGRESS_TRACKER_DIR") or DEFAULT_TRACKER_DIRNAME
+    validate_single_line(dirname_arg, "--dir")
     tracker_dir, dirname = resolve_tracker_dir(project_root, dirname_arg)
     template_path = tracker_dir / "_template" / "PROGRESS.md"
     index_path = tracker_dir / "INDEX.md"

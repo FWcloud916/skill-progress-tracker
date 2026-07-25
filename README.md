@@ -13,13 +13,17 @@ several — for any project.
 - **Multi-scope, tool-agnostic** — `--scope name[:branch[:ticket]]` accepts
   any free-form label (a service, a package, a sibling repo — not validated
   against a directory) and any ticket format (serial, `#123`, `JIRA-111`, a
-  URL — kept verbatim, no normalization).
+  URL — kept verbatim, no normalization). Literal delimiters use backslash
+  escaping.
 - **Plan integration, optional** — `--plan <path>` copies whatever planning
   artifact you have (Claude Code plan-mode output, a draft doc, anything)
-  into a version-controlled snapshot linked from the item.
-- **Canonical status lifecycle** — `planning → in-progress → review → done`,
-  with `blocked`/`abandoned` branches, defined once in `SKILL.md` and mirrored
-  everywhere else.
+  into a slug-namespaced, version-controlled snapshot linked from the item.
+- **Lifecycle automation** — `update_progress.py` validates transitions,
+  updates item and INDEX statuses together, closes outcomes, and audits drift,
+  duplicates, missing rows, and stale rows.
+- **Canonical status lifecycle** — `planning → in-progress ⇄ review → done`,
+  with blocked/resume and explicit abandonment paths, defined in `SKILL.md`
+  and mirrored everywhere else.
 - **Human-only cleanup** — the script and any agent using this skill never
   delete item folders or INDEX rows; that stays a manual decision.
 
@@ -82,6 +86,7 @@ natural language:
 
 - "start tracking this refactor" / "I need a progress note for this task" → create
 - "update the progress item for X" → update
+- "check the tracker for status drift" → audit
 - "close out the subscription-refund progress item" → close-out
 
 **As a dedicated agent** (requires the agent symlink):
@@ -98,6 +103,14 @@ uv run skills/progress-tracker/scripts/new_progress.py subscription-refund \
   --ticket EPIC-100 \
   --plan ./my-plan.md \
   --title "Refund flow rework"
+
+uv run skills/progress-tracker/scripts/update_progress.py update subscription-refund \
+  --status in-progress --work-log "Implemented validation."
+
+uv run skills/progress-tracker/scripts/update_progress.py close subscription-refund \
+  --outcome "Merged and deployed." --pr "PR #42"
+
+uv run skills/progress-tracker/scripts/update_progress.py check
 ```
 
 ## In a Kdan Mobile workspace?
@@ -116,6 +129,7 @@ any change:
 bash scripts/verify.sh                                                          # consistency gate
 uv run --with pytest python3 -m pytest skills/progress-tracker/scripts/ -v      # unit + integration tests
 python3 evals/scripts/test_grade_scenarios.py                                    # free scenario grader tests
+python3 evals/scripts/run_scenarios.py                                           # end-to-end lifecycle scenarios
 ```
 
 ## Project structure
@@ -128,7 +142,7 @@ progress-tracker/
 │       ├── SKILL.md      # entry point: lifecycle, args, status enum
 │       ├── agents/       # Codex UI metadata (openai.yaml)
 │       ├── references/   # workflow spec + item/index templates + seed READMEs
-│       └── scripts/      # new_progress.py + its pytest suite
+│       └── scripts/      # create/update/check CLIs + their pytest suites
 ├── agents/           # dedicated agent definition (preloads the skill)
 ├── AGENTS.md         # maintainer guide for this repo (CLAUDE.md is a symlink to it)
 ├── docs/             # design-decisions.md — why the skill is built this way

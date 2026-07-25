@@ -8,8 +8,9 @@ is a deterministic script, not a model judgment call).
 
 1. **Lifecycle scenarios** run the real scaffold script end-to-end in a
    disposable git repository and grade filesystem/content invariants —
-   creation, multi-scope expansion, plan-snapshot linking and collision
-   refusal, close-out edits, and contained custom `--dir`/`--root` overrides.
+   creation, multi-scope expansion, escaped input, slug-namespaced plan
+   snapshots, lifecycle-script close-out, and contained custom
+   `--dir`/`--root` overrides.
 2. **Trigger matrix** records the intended boundary for when an agent should
    (or should not) reach for this skill, including the boundary against
    doc-architect's differently-scoped `PROGRESS.md` harness module.
@@ -18,17 +19,17 @@ The primary correctness gate is actually neither of these — it's
 [`skills/progress-tracker/scripts/test_new_progress.py`](../skills/progress-tracker/scripts/test_new_progress.py)
 (pytest), which unit- and integration-tests `new_progress.py` directly. The
 scenarios here exist to additionally prove the **documented lifecycle** (the
-sequence of script + manual edits SKILL.md describes) holds end-to-end, and
-to protect the grading logic itself from false-greening.
+sequence of creation, update, audit, and close-out commands) holds end-to-end,
+and to protect the grading logic itself from false-greening.
 
 ## Layout
 
 ```
 evals/
 ├── README.md                  # this file
-├── scenarios/                 # 8 disposable-repo lifecycle scenarios
+├── scenarios/                 # 9 disposable-repo lifecycle scenarios
 │   └── */scenario.json        # steps (run/write/edit) + deterministic checks
-├── trigger-matrix.json        # 7 positive + 4 negative/boundary prompts
+├── trigger-matrix.json        # 8 positive + 4 negative/boundary prompts
 └── scripts/
     ├── run_scenarios.py       # runs each scenario's steps against a disposable git repo
     ├── run_scenarios.sh       # thin bash entry point → run_scenarios.py
@@ -44,10 +45,10 @@ Each `scenario.json` has `description`, `steps`, and `checks`.
 
 | Step type | Fields | Effect |
 |---|---|---|
-| `run` | `args` | Invokes `new_progress.py` with these CLI args |
-| `run_expect_fail` | `args`, `expect_stderr_contains` (optional) | Invokes it and asserts a non-zero exit (and optionally a stderr substring) |
+| `run` | `args`, `script` (optional: `new`/`update`) | Invokes `new_progress.py` by default, or the selected lifecycle script |
+| `run_expect_fail` | `args`, `script`, `expect_stderr_contains` (optional) | Invokes the selected script and asserts a non-zero exit (and optionally a stderr substring) |
 | `write` | `path`, `content` | Writes a file directly (e.g. a plan file to later pass via `--plan`) |
-| `edit` | `glob`, `find`, `replace` | Simulates a manual/agent edit (e.g. the "after completing work" Outcome fill-in), applied to every file matching `glob` |
+| `edit` | `glob`, `find`, `replace` | Applies a deterministic fixture or legacy/manual edit to every matching file |
 
 **Checks** (evaluated against the final repo state):
 

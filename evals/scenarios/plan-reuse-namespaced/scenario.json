@@ -1,0 +1,24 @@
+{
+  "description": "Two tasks can snapshot plan files with the same basename because snapshots are namespaced by task slug.",
+  "steps": [
+    {"type": "write", "path": "my-plan.md", "content": "# The Plan\n"},
+    {"type": "run", "args": ["task-a", "--scope", "api", "--plan", "./my-plan.md"]},
+    {"type": "run", "args": ["task-b", "--scope", "api", "--plan", "./my-plan.md"]}
+  ],
+  "checks": {
+    "files_exist": [
+      "progress/*-task-a/PROGRESS.md",
+      "progress/*-task-b/PROGRESS.md",
+      "progress/_plans/task-a-my-plan.md",
+      "progress/_plans/task-b-my-plan.md"
+    ],
+    "content_contains": [
+      {"glob": "progress/*-task-a/PROGRESS.md", "text": "[task-a-my-plan.md](../_plans/task-a-my-plan.md)"},
+      {"glob": "progress/*-task-b/PROGRESS.md", "text": "[task-b-my-plan.md](../_plans/task-b-my-plan.md)"}
+    ],
+    "content_count": [
+      {"glob": "progress/INDEX.md", "text": "Task A", "count": 1},
+      {"glob": "progress/INDEX.md", "text": "Task B", "count": 1}
+    ]
+  }
+}

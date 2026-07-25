@@ -1,4 +1,4 @@
 interface:
   display_name: "Progress Tracker"
-  short_description: "Track local development progress across scopes"
-  default_prompt: "Use $progress-tracker to create, update, or close out a development progress item."
+  short_description: "Create, update, close, and audit progress items"
+  default_prompt: "Use $progress-tracker to create, update, audit, or close out a development progress item."

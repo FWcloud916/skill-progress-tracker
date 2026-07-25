@@ -1,0 +1,17 @@
+{
+  "description": "Escaped scope delimiters and Markdown-sensitive values produce valid single-row table cells without losing semantic values.",
+  "steps": [
+    {"type": "run", "args": ["escaped-task", "--scope", "api\\,edge:feature/x:JIRA-1\\,JIRA-2", "--ticket", "EPIC|9", "--title", "API | Edge"]}
+  ],
+  "checks": {
+    "content_contains": [
+      {"glob": "progress/*-escaped-task/PROGRESS.md", "text": "`api,edge`"},
+      {"glob": "progress/*-escaped-task/PROGRESS.md", "text": "JIRA-1,JIRA-2"},
+      {"glob": "progress/INDEX.md", "text": "API \\| Edge"},
+      {"glob": "progress/INDEX.md", "text": "EPIC\\|9"}
+    ],
+    "content_not_contains": [
+      {"glob": "progress/*-escaped-task/PROGRESS.md", "text": "| `edge` |"}
+    ]
+  }
+}

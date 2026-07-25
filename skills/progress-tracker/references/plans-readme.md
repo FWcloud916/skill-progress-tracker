@@ -3,7 +3,8 @@
 Version-controlled snapshots of the plan that was active when each progress
 item was created.
 
-- One file per task: `<plan-name>.md`
+- One file per task: `<slug>-<plan-name>.md` (the slug namespace prevents
+  collisions when tasks reuse a common source filename such as `plan.md`)
 - Written by `new_progress.py --plan <path>` (copied from wherever the plan
   was originally written)
 - Treat as a **frozen snapshot** of the original intent — do not edit after

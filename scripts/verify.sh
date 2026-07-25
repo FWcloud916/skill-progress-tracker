@@ -48,9 +48,11 @@ expected_enum = (
     "Status enum: `planning`, `in-progress`, `review`, `blocked`, `done`, `abandoned`"
 )
 expected_diagram = """```
-planning → in-progress → review → done
-                       ↘ abandoned
-         ↘ blocked → in-progress
+planning → in-progress ⇄ review → done
+                ↕
+             blocked
+
+Any non-terminal status → abandoned
 ```"""
 
 blocks = []
@@ -62,6 +64,12 @@ for path in paths:
     assert expected_diagram in block, f"transition diagram in {path}"
     blocks.append(block)
 assert all(block == blocks[0] for block in blocks[1:]), "lifecycle blocks differ"
+
+script = Path("skills/progress-tracker/scripts/update_progress.py").read_text(encoding="utf-8")
+expected_tuple = (
+    'STATUS_VALUES = ("planning", "in-progress", "review", "blocked", "done", "abandoned")'
+)
+assert expected_tuple in script, "update_progress.py status enum differs"
 PY
 report "$lifecycle_ok" "status enum and transition diagram match exactly" "lifecycle block validation failed"
 
@@ -109,6 +117,8 @@ report "$scaffold_links_ok" "scaffolded relative markdown links resolve" "scaffo
 portable_command_ok=0
 grep -q 'uv run <skill-dir>/scripts/new_progress.py' "$SKILL_MD" || portable_command_ok=1
 grep -q 'uv run <skill-dir>/scripts/new_progress.py' "$REFS/tracker-readme.md" || portable_command_ok=1
+grep -q 'uv run <skill-dir>/scripts/update_progress.py' "$SKILL_MD" || portable_command_ok=1
+grep -q 'uv run <skill-dir>/scripts/update_progress.py' "$REFS/tracker-readme.md" || portable_command_ok=1
 grep -qE 'uv run (scripts/new_progress.py|new_progress.py)' "$SKILL_MD" "$REFS/tracker-readme.md" \
   && portable_command_ok=1
 report "$portable_command_ok" "scaffold command uses the installed skill path" "found a cwd-relative command"
@@ -168,7 +178,7 @@ report "$([ "$description_words" -ge 40 ] && [ "$description_words" -le 160 ]; e
 #     excluded — they legitimately *discuss* these terms as history/rationale
 #     or as the one intentional cross-reference to the Kdan-internal sibling.
 kdan_residue=$(grep -rniE 'redmine|gitlab|kdan|ticket-sync|~/\.claude/plans|~/Documents/projects|WORKSPACE_ROOT' \
-  "$REFS"/*.md "$SCRIPTS"/new_progress.py 2>/dev/null)
+  "$REFS"/*.md "$SCRIPTS"/new_progress.py "$SCRIPTS"/update_progress.py 2>/dev/null)
 report "$([ -z "$kdan_residue" ]; echo $?)" "no leftover Kdan-specific coupling residue in references/scripts" "$kdan_residue"
 
 # 13. Trigger matrix shape (if present).
@@ -194,8 +204,7 @@ if command -v uv >/dev/null 2>&1; then
 elif python3 -c "import pytest" >/dev/null 2>&1; then
   (cd "$SCRIPTS" && python3 -m pytest . -q) >/tmp/progress-tracker-pytest.log 2>&1 && pytest_ok=0
 else
-  echo "SKIP  scaffold-script test suite (no uv or pytest available)"
-  pytest_ok=0
+  echo "FAIL  scaffold-script test suite (no uv or pytest available)"
 fi
 report "$pytest_ok" "scaffold-script test suite passes" "see /tmp/progress-tracker-pytest.log"
 
@@ -206,7 +215,12 @@ if [ -f evals/scripts/test_grade_scenarios.py ]; then
   report "$scenario_tests_ok" "scenario grader regression tests pass" "see /tmp/progress-tracker-scenario-tests.log"
 fi
 
-# 16. Shell script syntax.
+# 16. End-to-end lifecycle scenarios run the real scripts.
+scenario_run_ok=1
+python3 evals/scripts/run_scenarios.py >/tmp/progress-tracker-scenarios.log 2>&1 && scenario_run_ok=0
+report "$scenario_run_ok" "end-to-end lifecycle scenarios pass" "see /tmp/progress-tracker-scenarios.log"
+
+# 17. Shell script syntax.
 shell_syntax_ok=0
 shell_scripts=$(find evals/scripts -name '*.sh' 2>/dev/null)
 if [ -n "$shell_scripts" ]; then

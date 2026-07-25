@@ -30,6 +30,12 @@
     "reason": "Closing out (Outcome + status done) is the final lifecycle stage this skill owns."
   },
   {
+    "id": "audit-existing-tracker",
+    "prompt": "Check the progress tracker for stale INDEX rows or status drift.",
+    "expected": "progress-tracker",
+    "reason": "Auditing tracker consistency is a lifecycle maintenance operation owned by this skill."
+  },
+  {
     "id": "single-scope-bugfix-with-lifecycle",
     "prompt": "This is a single-service bug fix but I still want a progress record through investigate/fix/test/PR.",
     "expected": "progress-tracker",

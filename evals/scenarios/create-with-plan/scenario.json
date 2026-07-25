@@ -6,12 +6,12 @@
   ],
   "checks": {
     "files_exist": [
-      "progress/_plans/my-plan.md",
+      "progress/_plans/planned-task-my-plan.md",
       "progress/*-planned-task/PROGRESS.md"
     ],
     "content_contains": [
-      {"glob": "progress/*-planned-task/PROGRESS.md", "text": "../_plans/my-plan.md"},
-      {"glob": "progress/INDEX.md", "text": "_plans/my-plan.md"}
+      {"glob": "progress/*-planned-task/PROGRESS.md", "text": "[planned-task-my-plan.md](../_plans/planned-task-my-plan.md)"},
+      {"glob": "progress/INDEX.md", "text": "[planned-task-my-plan.md](_plans/planned-task-my-plan.md)"}
     ]
   }
 }
