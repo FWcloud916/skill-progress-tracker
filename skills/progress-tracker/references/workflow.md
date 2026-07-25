@@ -32,7 +32,7 @@ across sessions and machines.
 
 - **uv** (recommended): `uv run` installs Python automatically and reads the
   PEP 723 inline metadata, no manual pip needed.
-- Or: Python 3.14+ (pure stdlib, no third-party dependencies), run directly
+- Or: Python 3.10+ (pure stdlib, no third-party dependencies), run directly
   with `python3 new_progress.py`.
 
 ---
@@ -55,17 +55,19 @@ The script will:
 
 ### 2. During work: keep the record current
 
-Open `<tracker-dir>/YYYY-MM-DD-<slug>/PROGRESS.md`, back-fill `TBD` values,
-tick off tasks, add a `## Work log` entry, update **Updated**, and update the
-status in both `PROGRESS.md` and `INDEX.md`. Field-by-field spec and the status enum
+Run `update_progress.py update <slug>` with `--status`, `--scope`,
+`--work-log`, and/or repeatable `--complete-task` options. The script updates
+the living record and its INDEX status together after validating current
+consistency and the requested transition. Field-by-field spec and the status enum
 (`planning` / `in-progress` / `review` / `blocked` / `done` / `abandoned`) →
 [`SKILL.md`](../SKILL.md) §During work, §Status lifecycle.
 
 ### 3. After work: close out
 
-- Fill in `PROGRESS.md`'s `## Outcome` (final status, PR/commit refs, follow-ups)
-- Update the **Updated** field
-- Change the status in both `PROGRESS.md` and `INDEX.md` to `done` (or `abandoned`)
+Run `update_progress.py close <slug> --outcome <text>` with optional `--pr`,
+`--follow-up`, and `--status done|abandoned`. The script fills `## Outcome`,
+adds a final Work log entry, updates **Updated**, and synchronizes the two
+status fields. Run `update_progress.py check` to audit the result.
 
 ### Manual fallback (no script)
 
@@ -87,7 +89,7 @@ progress/
 │   └── PROGRESS.md                    # single source of truth for the template (script fills this in)
 ├── _plans/                            # version-controlled frozen plan snapshots (script's --plan copies here)
 │   ├── README.md
-│   └── refund-flow-abstract-breeze.md
+│   └── subscription-refund-refund-flow-abstract-breeze.md
 ├── 2026-06-17-subscription-refund/    # one development task (date prefix + kebab-case slug)
 │   └── PROGRESS.md                    # that task's progress record
 └── 2026-06-20-receipt-sync-fix/
@@ -110,7 +112,7 @@ progress/
 | **Slug** | The kebab-case identifier used in the folder name — a stable, machine-readable ID distinct from the human-readable title |
 | **Status** | Current progress; see the status section below |
 | **Ticket** | Umbrella/epic reference for the whole task; kept verbatim; `N/A` if none |
-| **Related plan** | Relative path to the version-controlled snapshot (`../_plans/<name>.md`), or `N/A`. The snapshot is copied in by the script at creation time and is a frozen record of original intent; `PROGRESS.md` itself is the living source of truth as development proceeds. |
+| **Related plan** | Explicit relative Markdown link to the slug-namespaced version-controlled snapshot (`../_plans/<slug>-<name>`), or `N/A`. The snapshot is copied in by the script at creation time and is a frozen record of original intent; `PROGRESS.md` itself is the living source of truth as development proceeds. |
 | **Created** | `YYYY-MM-DD`, filled in automatically by the script |
 | **Updated** | Updated by hand or by an agent every time the record changes |
 
@@ -146,9 +148,11 @@ the scaffolded `INDEX.md`:
 Status enum: `planning`, `in-progress`, `review`, `blocked`, `done`, `abandoned`
 
 ```
-planning → in-progress → review → done
-                       ↘ abandoned
-         ↘ blocked → in-progress
+planning → in-progress ⇄ review → done
+                ↕
+             blocked
+
+Any non-terminal status → abandoned
 ```
 <!-- STATUS_LIFECYCLE_END -->
 
@@ -163,9 +167,10 @@ originally written, so the snapshot travels with the repository regardless of
 machine. Resolution rules for bare filenames vs. paths →
 [`SKILL.md`](../SKILL.md) §Before starting work.
 
-The script copies the plan to `_plans/<name>.md`; `PROGRESS.md`'s **Related
-plan** field records the relative path `../_plans/<name>.md` (clickable in an
-editor).
+The script copies the plan to `_plans/<slug>-<name>.md`; `PROGRESS.md`'s
+**Related plan** field records an explicit relative Markdown link. Prefixing
+the task slug preserves immutable snapshots while allowing different tasks to
+reuse common source filenames such as `plan.md`.
 
 **Why copy instead of writing directly into `_plans/`?** Different planning
 tools and agents write their plan output to different locations, and some of
@@ -201,7 +206,9 @@ its own.
 - Include **every scope entry involved** in `--scope`, even read-only ones
 - Fill in `TBD` for branch/ticket before they exist, then back-fill `## Scope` once known
 - Always link a plan-mode/planning-tool plan via `--plan` when one exists
+- Escape literal scope delimiters as `\,`, `\:`, and `\\`
 - Pass an umbrella/epic reference via `--ticket` when one exists; it's kept exactly as given
+- Use `update_progress.py update` / `close` for lifecycle mutations, then run `check`
 - Update `## Work log` daily, at a granularity that supports retrospection later
 - Fill in `## Outcome` and update the INDEX status when development ends
 
@@ -211,7 +218,7 @@ its own.
   `abandoned` first, then clean up manually)
 - Don't fill real content into `_template/PROGRESS.md` (the template should
   only ever contain `{{PLACEHOLDER}}` tokens)
-- Don't change status in only one file; keep `PROGRESS.md` and `INDEX.md` identical
+- Don't change status in only one file; use the lifecycle script or run `check` after manual edits
 - Don't pass a `slug` containing uppercase letters, underscores, or spaces (the script rejects it)
 - Don't use a separator other than comma between `--scope` entries (comma
   separates entries, colon separates name/branch/ticket within one)

@@ -2,8 +2,8 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "progress-tracker",
   "displayName": "Progress Tracker",
-  "version": "1.0.1",
-  "description": "Tracks local development progress across single- or multi-scope tasks with a scaffold script, a canonical item template, and a status lifecycle — for any project.",
+  "version": "1.1.0",
+  "description": "Tracks local development progress across scopes with safe create, update, close-out, and consistency-audit scripts — for any project.",
   "author": {
     "name": "FWcloud916",
     "url": "https://github.com/FWcloud916"

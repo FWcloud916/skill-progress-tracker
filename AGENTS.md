@@ -37,6 +37,10 @@ doubles as a Claude Code plugin (`.claude-plugin/`) and marketplace for it.
   this test suite is the primary correctness gate, since (unlike
   doc-architect's model-graded detection) this skill's core logic is
   deterministic and testable (source: docs/design-decisions.md)
+- Changing `update_progress.py`'s behavior MUST come with matching updates to
+  `skills/progress-tracker/scripts/test_update_progress.py` in the same change;
+  lifecycle mutations and audits are deterministic and MUST remain covered
+  (source: docs/design-decisions.md)
 - MUST edit `AGENTS.md`, never `CLAUDE.md` (symlink)
 - User-visible skill changes MUST bump `version` in `.claude-plugin/plugin.json`
   — plugin users only receive updates on a version bump (source: plugins reference)
@@ -54,6 +58,7 @@ single-line edits) can skip; do not pre-load all docs.
 | Task | Read first |
 |---|---|
 | Changing scaffold-script behavior or CLI arguments | [SKILL.md](skills/progress-tracker/SKILL.md) + [new_progress.py](skills/progress-tracker/scripts/new_progress.py) |
+| Changing lifecycle update, close-out, or audit behavior | [SKILL.md](skills/progress-tracker/SKILL.md) + [update_progress.py](skills/progress-tracker/scripts/update_progress.py) |
 | Changing the item template or INDEX shape | [PROGRESS.template.md](skills/progress-tracker/references/PROGRESS.template.md) + [INDEX.template.md](skills/progress-tracker/references/INDEX.template.md) |
 | Changing the status lifecycle | [SKILL.md](skills/progress-tracker/SKILL.md) §Status lifecycle + [workflow.md](skills/progress-tracker/references/workflow.md) |
 | Changing eval scenarios or the trigger matrix | [evals/README.md](evals/README.md) |

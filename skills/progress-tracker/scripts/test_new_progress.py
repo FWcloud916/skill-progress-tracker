@@ -121,6 +121,21 @@ class TestParseScope:
         entries = np.parse_scope("api::100")
         assert entries == [("api", "TBD", "100")]
 
+    def test_escaped_delimiters_are_literal(self):
+        entries = np.parse_scope(r"api\,worker:feature/x:JIRA-1\,JIRA-2,docs\:site")
+        assert entries == [
+            ("api,worker", "feature/x", "JIRA-1,JIRA-2"),
+            ("docs:site", "TBD", "TBD"),
+        ]
+
+    def test_trailing_escape_errors(self):
+        with pytest.raises(SystemExit):
+            np.parse_scope("api\\")
+
+    def test_unknown_escape_errors(self):
+        with pytest.raises(SystemExit):
+            np.parse_scope(r"api\q")
+
 
 class TestResolvePlan:
     def test_no_plan(self):
@@ -184,6 +199,24 @@ class TestRenderScopeRows:
     def test_multiple_rows(self):
         rows = np.render_scope_rows([("api", "TBD", "TBD"), ("worker", "TBD", "TBD")])
         assert len(rows.splitlines()) == 2
+
+    def test_escapes_markdown_table_delimiters_and_backticks(self):
+        rows = np.render_scope_rows([("api|edge`v2", "feature/`edge", "JIRA|1")])
+        assert r"api\|edge`v2" in rows
+        assert r"JIRA\|1" in rows
+        assert "``" in rows
+
+
+class TestMarkdownRendering:
+    def test_table_text_escapes_pipe_and_backslash(self):
+        assert np.markdown_table_text(r"A\B|C") == r"A\\B\|C"
+
+    def test_single_line_validation_rejects_newlines(self):
+        with pytest.raises(SystemExit):
+            np.validate_single_line("line one\nline two", "value")
+
+    def test_snapshot_name_is_namespaced_by_slug(self):
+        assert np.snapshot_plan_name("task-a", "plan.md") == "task-a-plan.md"
 
 
 class TestResolveProjectRoot:
@@ -350,21 +383,25 @@ class TestCliPlanIntegration:
         plan.write_text("# The Plan\n")
         result = run_cli(["planned-task", "--scope", "api", "--plan", str(plan)], cwd=project)
         assert result.returncode == 0, result.stderr
-        assert (project / "progress" / "_plans" / "my-plan.md").exists()
+        assert (project / "progress" / "_plans" / "planned-task-my-plan.md").exists()
         item_dirs = list((project / "progress").glob("*-planned-task"))
         content = (item_dirs[0] / "PROGRESS.md").read_text()
-        assert "../_plans/my-plan.md" in content
+        assert (
+            "[planned-task-my-plan.md](../_plans/planned-task-my-plan.md)" in content
+        )
+        index = (project / "progress" / "INDEX.md").read_text()
+        assert "[planned-task-my-plan.md](_plans/planned-task-my-plan.md)" in index
 
-    def test_plan_snapshot_not_overwritten(self, project):
+    def test_plan_snapshot_namespaced_for_reuse(self, project):
         plan = project / "my-plan.md"
         plan.write_text("# The Plan\n")
-        run_cli(["task-a", "--scope", "api", "--plan", str(plan)], cwd=project)
-        # A second task reusing the same plan filename must not clobber the snapshot.
+        first = run_cli(["task-a", "--scope", "api", "--plan", str(plan)], cwd=project)
         result = run_cli(["task-b", "--scope", "api", "--plan", str(plan)], cwd=project)
-        assert result.returncode != 0
-        assert "already exists" in result.stderr
-        assert not list((project / "progress").glob("*-task-b"))
-        assert "Task B" not in (project / "progress" / "INDEX.md").read_text()
+        assert first.returncode == 0, first.stderr
+        assert result.returncode == 0, result.stderr
+        assert (project / "progress" / "_plans" / "task-a-my-plan.md").exists()
+        assert (project / "progress" / "_plans" / "task-b-my-plan.md").exists()
+        assert list((project / "progress").glob("*-task-b"))
 
     def test_broken_index_fails_before_writing_anything(self, project):
         tracker = project / "progress"
@@ -380,7 +417,7 @@ class TestCliPlanIntegration:
         assert result.returncode != 0
         assert "table header marker" in result.stderr
         assert not list(tracker.glob("*-broken-index"))
-        assert not (tracker / "_plans" / "my-plan.md").exists()
+        assert not (tracker / "_plans" / "broken-index-my-plan.md").exists()
         assert not (tracker / "README.md").exists()
 
 
@@ -475,6 +512,14 @@ class TestCliTitleDefaulting:
         content = (item_dirs[0] / "PROGRESS.md").read_text()
         assert content.startswith("# Custom Title Here")
 
+    def test_title_pipe_is_escaped_in_index(self, project):
+        result = run_cli(
+            ["my-task", "--scope", "api", "--title", "API | Worker"], cwd=project
+        )
+        assert result.returncode == 0, result.stderr
+        index = (project / "progress" / "INDEX.md").read_text()
+        assert r"| API \| Worker |" in index
+
 
 class TestCliValidation:
     def test_invalid_slug_rejected(self, project):
@@ -485,3 +530,15 @@ class TestCliValidation:
     def test_missing_required_scope_rejected(self, project):
         result = run_cli(["my-task"], cwd=project)
         assert result.returncode != 0
+
+    @pytest.mark.parametrize(
+        "args",
+        [
+            ["my-task", "--scope", "api", "--title", "bad\ntitle"],
+            ["my-task", "--scope", "api", "--ticket", "bad\nticket"],
+        ],
+    )
+    def test_multiline_values_rejected(self, project, args):
+        result = run_cli(args, cwd=project)
+        assert result.returncode != 0
+        assert "single line" in result.stderr

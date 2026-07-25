@@ -1,11 +1,11 @@
 # Progress Tracker Improvements
 
 **Slug:** progress-tracker-improvements
-**Status:** planning
+**Status:** in-progress
 **Ticket:** N/A
 **Related plan:** ../_plans/progress-tracker-improvements-plan.md
 **Created:** 2026-07-24
-**Updated:** 2026-07-24
+**Updated:** 2026-07-25
 
 ---
 
@@ -13,7 +13,7 @@
 
 | Scope | Branch | Ticket | Notes |
 |---|---|---|---|
-| `progress-tracker` | TBD | TBD | Baseline assessment performed on `main`; implementation branch has not been created. |
+| `progress-tracker` | `feat/progress-tracker-improvements` | TBD | Implementation started from the reviewed baseline on `main`. |
 
 ## Background & goals
 
@@ -35,20 +35,20 @@ The frozen implementation plan is recorded in
 
 - [x] Complete the baseline architecture, behavior, test, and eval review.
 - [x] Record the prioritized improvement plan and acceptance criteria.
-- [ ] P0: run lifecycle scenarios from `scripts/verify.sh` and fail when the
+- [x] P0: run lifecycle scenarios from `scripts/verify.sh` and fail when the
   required Python test runner is unavailable.
-- [ ] P1: add validated update, status-transition, close-out, and audit/check
+- [x] P1: add validated update, status-transition, close-out, and audit/check
   operations that keep `PROGRESS.md` and `INDEX.md` synchronized.
-- [ ] P1: define delimiter behavior and escape or reject Markdown-breaking
+- [x] P1: define delimiter behavior and escape or reject Markdown-breaking
   title, scope, branch, ticket, and plan values.
-- [ ] P2: establish and test the real minimum Python version instead of
+- [x] P2: establish and test the real minimum Python version instead of
   requiring Python 3.14 without a demonstrated need.
-- [ ] P2: namespace plan snapshots by task identity and render explicit
+- [x] P2: namespace plan snapshots by task identity and render explicit
   Markdown links while preserving existing tracker compatibility.
-- [ ] Update unit tests, lifecycle scenarios, trigger coverage, CLI help,
+- [x] Update unit tests, lifecycle scenarios, trigger coverage, CLI help,
   SKILL.md, references, README, and design decisions with each behavior change.
-- [ ] Bump the plugin version for the user-visible release.
-- [ ] Run the complete verification and lint suite before review.
+- [x] Bump the plugin version for the user-visible release.
+- [x] Run the complete verification and lint suite before review.
 
 ## Work log
 
@@ -63,6 +63,15 @@ The frozen implementation plan is recorded in
   documented as part of the gate but are not currently invoked by it.
 - Created this tracker item and saved the original improvement plan as an
   immutable snapshot.
+- Created `feat/progress-tracker-improvements` and started implementation in
+  the planned priority order.
+
+### 2026-07-25
+
+- Implemented lifecycle automation, input hardening, verification truthfulness,
+  Python compatibility, and namespaced plan snapshots.
+- Final verification passed on Python 3.10 and 3.14 with 105 tests each, 9
+  lifecycle scenarios, the repository consistency gate, and Ruff 0.16.0.
 
 ## Outcome
 

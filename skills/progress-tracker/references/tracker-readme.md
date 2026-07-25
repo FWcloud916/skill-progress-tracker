@@ -37,17 +37,40 @@ uv run <skill-dir>/scripts/new_progress.py <slug> \
 ```
 
 `--scope` syntax: `name[:branch[:ticket]]`, comma-separated for multiple
-entries; branch and ticket default to `TBD` when omitted. The script creates
+entries; escape literal delimiters as `\,`, `\:`, and `\\`. Branch and ticket
+default to `TBD` when omitted. The script creates
 `<tracker-dir>/YYYY-MM-DD-<slug>/PROGRESS.md` and appends a row to
 `INDEX.md`.
+
+## How to update or close an item
+
+Use the installed skill's lifecycle script so status changes are validated and
+written to `PROGRESS.md` and `INDEX.md` together:
+
+```bash
+uv run <skill-dir>/scripts/update_progress.py update <slug> \
+  --status in-progress \
+  --work-log "Implemented validation." \
+  [--scope "api:feature/task:JIRA-1"] \
+  [--complete-task "Add validation"] \
+  [--dry-run]
+
+uv run <skill-dir>/scripts/update_progress.py close <slug> \
+  --outcome "Merged and deployed." \
+  [--pr "PR #42"] \
+  [--follow-up "Monitor metrics."] \
+  [--status done]
+
+uv run <skill-dir>/scripts/update_progress.py check
+```
 
 **Manual fallback (no script):**
 1. Copy `_template/PROGRESS.md` into a new folder `YYYY-MM-DD-<slug>/`
 2. Replace every `{{PLACEHOLDER}}`
 3. Add a row to the [`INDEX.md`](INDEX.md) table manually
 
-Invoke the installed `progress-tracker` skill for the full workflow. Item
-list: [`INDEX.md`](INDEX.md).
+Invoke the installed `progress-tracker` skill for the full workflow and
+allowed status transitions. Item list: [`INDEX.md`](INDEX.md).
 
 ## Cleanup policy
 

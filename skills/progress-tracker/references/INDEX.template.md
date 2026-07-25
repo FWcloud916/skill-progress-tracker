@@ -1,8 +1,9 @@
 # Progress Item Index
 
-Items are created by `new_progress.py`, then maintained by developers or
-agents. See [`README.md`](README.md) for usage and invoke the installed
-`progress-tracker` skill for the full workflow.
+Items are created by `new_progress.py`, then maintained with
+`update_progress.py` by developers or agents. See [`README.md`](README.md)
+for usage and invoke the installed `progress-tracker` skill for the full
+workflow.
 
 ## Items
 
@@ -18,9 +19,11 @@ Keep each item's status here identical to the Status field in its
 Status enum: `planning`, `in-progress`, `review`, `blocked`, `done`, `abandoned`
 
 ```
-planning → in-progress → review → done
-                       ↘ abandoned
-         ↘ blocked → in-progress
+planning → in-progress ⇄ review → done
+                ↕
+             blocked
+
+Any non-terminal status → abandoned
 ```
 <!-- STATUS_LIFECYCLE_END -->
 
