@@ -5,6 +5,10 @@ No model/LLM call is involved — the creation and lifecycle scripts are
 deterministic, so each scenario runs them directly and grades the resulting
 filesystem state. See evals/README.md.
 
+The scripts under test are executed with `uv run`, which reads their PEP 723
+metadata and provisions the declared Python version. Without uv, the current
+interpreter is used as a fallback and must satisfy that same version floor.
+
 Usage:
     python3 run_scenarios.py                  # all scenarios
     python3 run_scenarios.py create-basic      # one scenario, by directory name
@@ -13,9 +17,11 @@ Usage:
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
+from functools import lru_cache
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +31,24 @@ UPDATE_PROGRESS_SCRIPT = (
     REPO_ROOT / "skills" / "progress-tracker" / "scripts" / "update_progress.py"
 )
 GRADE_SCRIPT = REPO_ROOT / "evals" / "scripts" / "grade_scenarios.py"
+
+
+SUPPORTED_PYTHON = (3, 14)
+
+
+@lru_cache(maxsize=1)
+def script_runner() -> tuple[str, ...]:
+    """Command prefix that runs a script under test on its PEP 723 Python."""
+    if shutil.which("uv"):
+        return ("uv", "run", "--quiet")
+    if sys.version_info >= SUPPORTED_PYTHON:
+        return (sys.executable,)
+    floor = ".".join(str(part) for part in SUPPORTED_PYTHON)
+    sys.exit(
+        f"ERROR: the scripts under test require Python >= {floor}, but uv is not "
+        f"installed and this interpreter is {sys.version.split()[0]}. "
+        f"Install uv, or rerun with a Python >= {floor} interpreter."
+    )
 
 
 def step_script(step: dict) -> Path:
@@ -46,7 +70,7 @@ def run_step(step: dict, repo_dir: Path) -> None:
     if kind == "run":
         script = step_script(step)
         result = subprocess.run(
-            [sys.executable, str(script), *step["args"]],
+            [*script_runner(), str(script), *step["args"]],
             cwd=repo_dir,
             capture_output=True,
             text=True,
@@ -59,7 +83,7 @@ def run_step(step: dict, repo_dir: Path) -> None:
     elif kind == "run_expect_fail":
         script = step_script(step)
         result = subprocess.run(
-            [sys.executable, str(script), *step["args"]],
+            [*script_runner(), str(script), *step["args"]],
             cwd=repo_dir,
             capture_output=True,
             text=True,

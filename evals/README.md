@@ -75,7 +75,10 @@ python3 evals/scripts/test_grade_scenarios.py
 ```
 
 Both are free and fast (no API key, no network) — they run on every
-`verify.sh` invocation and every CI push/PR.
+`verify.sh` invocation and every CI push/PR. The harness itself runs on any
+modern `python3`, but it executes the scripts under test via `uv run`, which
+provisions the Python version their PEP 723 metadata declares; without uv,
+the current interpreter must satisfy that floor itself.
 
 ## Adding a scenario
 

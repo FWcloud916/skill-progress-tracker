@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.14"
 # dependencies = []
 # ///
 r"""Create a new development progress item under a project's progress tracker.
@@ -82,6 +82,8 @@ Output:
 # ---------------------------------------------------------------------------
 # Imports
 # ---------------------------------------------------------------------------
+from __future__ import annotations
+
 import argparse
 import difflib
 import os

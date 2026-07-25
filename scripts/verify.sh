@@ -197,14 +197,14 @@ PY
   report "$trigger_matrix_ok" "trigger matrix has valid shape" "trigger-matrix.json validation failed"
 fi
 
-# 14. Unit + integration test suite passes.
+# 14. Unit + integration test suite passes, on the single supported Python.
 pytest_ok=1
 if command -v uv >/dev/null 2>&1; then
-  (cd "$SCRIPTS" && uv run --with pytest python3 -m pytest . -q) >/tmp/progress-tracker-pytest.log 2>&1 && pytest_ok=0
-elif python3 -c "import pytest" >/dev/null 2>&1; then
+  (cd "$SCRIPTS" && uv run --python 3.14 --with pytest python3 -m pytest . -q) >/tmp/progress-tracker-pytest.log 2>&1 && pytest_ok=0
+elif python3 -c 'import sys, pytest; sys.exit(0 if sys.version_info >= (3, 14) else 1)' >/dev/null 2>&1; then
   (cd "$SCRIPTS" && python3 -m pytest . -q) >/tmp/progress-tracker-pytest.log 2>&1 && pytest_ok=0
 else
-  echo "FAIL  scaffold-script test suite (no uv or pytest available)"
+  echo "FAIL  scaffold-script test suite (need uv, or pytest on Python >= 3.14)"
 fi
 report "$pytest_ok" "scaffold-script test suite passes" "see /tmp/progress-tracker-pytest.log"
 
@@ -227,6 +227,15 @@ if [ -n "$shell_scripts" ]; then
   bash -n $shell_scripts || shell_syntax_ok=1
 fi
 report "$shell_syntax_ok" "eval shell script syntax is valid" "bash -n failed"
+
+# 18. Single supported Python version: both scripts' PEP 723 floors and CI
+#     must all name the same version (3.14).
+py_version_ok=0
+grep -q '^# requires-python = ">=3.14"$' "$SCRIPTS/new_progress.py" || py_version_ok=1
+grep -q '^# requires-python = ">=3.14"$' "$SCRIPTS/update_progress.py" || py_version_ok=1
+grep -q 'uv python install 3.14' .github/workflows/ci.yml || py_version_ok=1
+grep -q -- '--python 3.14' .github/workflows/ci.yml || py_version_ok=1
+report "$py_version_ok" "single supported Python version (3.14) declared consistently" ""
 
 echo
 if [ "$fail" -eq 0 ]; then echo "verify.sh: all checks passed"; else echo "verify.sh: FAILURES above"; fi
