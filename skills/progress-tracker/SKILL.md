@@ -24,6 +24,7 @@ free-form label, not validated against anything.
 Full spec: `references/workflow.md`
 Item list: `<tracker-dir>/INDEX.md`
 Template:  `<tracker-dir>/_template/PROGRESS.md`
+Migration record template: `references/MIGRATION.template.md`
 
 > If you're inside Kdan Mobile's `kdan-workflow` workspace, use the
 > workspace-specific `progress-note` skill instead — it wires into that
@@ -49,35 +50,73 @@ If a separate tracking mechanism exists:
 2. **Ask whether to migrate.** An explicit answer is required; silence is not
    consent. If the user declines, preserve the existing mechanism and do not
    create a second tracker unless they explicitly choose coexistence.
-3. If approved, agree on a source-to-destination map before editing. Copy all
-   **in-progress content** into the new item(s): current status, scope,
-   branches/tickets/plans, goals, unfinished tasks, current work log, blockers,
-   next actions, and live references. Do not invent missing facts. Keep the
-   source unchanged during migration and audit.
-4. Audit source and destination side by side. For every active source field,
-   record its destination and verify semantic equivalence; explicitly document
-   any mapping into this skill's canonical status or field structure. A
-   migration with missing or unexplained active content fails.
+3. If approved, run `migration-inventory` to produce a section-by-section
+   inventory of the source (see below) **before** editing anything. Do not
+   rely on an "in progress" or "current work" section alone to decide what is
+   actionable — inventory the whole document. Do not invent missing facts.
+   Keep the source unchanged during migration and audit.
+4. Copy every actionable entry the inventory lists into the new item(s):
+   current status, scope, branches/tickets/plans, goals, unfinished tasks,
+   current work log, blockers, next actions, and live references. For each
+   entry, fill in the record's Disposition (`migrated`, `excluded`,
+   `archived`, or `not-applicable`) and Destination, and verify semantic
+   equivalence against wherever it landed.
 5. Update every live pointer to the old mechanism, including Markdown links,
    path mentions, agent instructions, command examples, scripts, and
    configuration.
 6. Run `update_progress.py check`, search the whole project for every old path
-   or filename, and inspect all changed links. Migration is complete only when
-   the content comparison and pointer audit both pass, every remaining match is
-   an intentional historical/compatibility reference, and every changed
-   relative link resolves.
-7. Only after that clean audit, show the results and ask whether to delete the
-   original tracking artifacts. Do not infer consent. If deletion is approved,
-   remove only the confirmed legacy targets, update any resulting pointers,
-   then rerun the consistency, old-reference, and link audits. If declined,
-   retain the originals as legacy records and keep live pointers on the new
-   tracker.
+   or filename, and inspect all changed links. Classify any remaining match as
+   an intentional historical/compatibility reference. Tick the record's human
+   sign-off checklist only once each item has actually been verified.
+7. Run `migration-audit` — the deletion gate:
 
-Report the active-content mapping, two-sided consistency result, pointer files
-updated, intentional legacy references, and the user's source-retention choice.
-Use a comparison table with `Source artifact/field`, `Source value summary`,
-`Destination item/section`, and `Result`; every row MUST pass before asking
-about deletion.
+<!-- MIGRATION_GATE_START -->
+Migration is script-gated. The deletion question MUST NOT be asked until both
+commands have run and the second exited 0:
+
+```bash
+uv run <skill-dir>/scripts/update_progress.py migration-inventory <slug> --source <legacy-path>
+uv run <skill-dir>/scripts/update_progress.py migration-audit <slug>
+```
+
+`migration-audit` fails while any actionable or ambiguous source entry lacks a
+disposition and destination. An empty WIP section is not evidence of an empty
+actionable set.
+<!-- MIGRATION_GATE_END -->
+
+   Only after `migration-audit` exits 0, show its output and ask whether to
+   delete the original tracking artifacts. Do not infer consent. If deletion
+   is approved, remove only the confirmed legacy targets, update any
+   resulting pointers, then rerun `migration-audit`, `update_progress.py
+   check`, and the old-reference/link audits. If declined, retain the
+   originals as legacy records and keep live pointers on the new tracker.
+
+Report the migration record's location, `migration-audit`'s pass/fail result,
+the historical/reference sections it disclosed, pointer files updated,
+intentional legacy references, and the user's source-retention choice.
+
+**Migration command reference:**
+
+```bash
+# Scan the legacy source(s) and write/refresh <tracker-dir>/_migrations/<slug>.md.
+# --source may repeat; a directory source is scanned recursively for *.md.
+# Re-running preserves every already-filled Disposition, Destination, and
+# ticked sign-off box whose entry is unchanged, and prints a refresh delta.
+uv run <skill-dir>/scripts/update_progress.py migration-inventory <slug> --source <legacy-path> [--source <legacy-path>...]
+
+# Rescan and reconcile against the record — the deletion gate. Exits non-zero
+# while any actionable/ambiguous entry lacks a Disposition and Destination,
+# any Kind was hand-edited, any migrated Destination isn't an existing item
+# slug, or any human sign-off box is unticked.
+uv run <skill-dir>/scripts/update_progress.py migration-audit <slug>
+```
+
+Every row in the generated record is one of five `Kind` values:
+`actionable` and `ambiguous` block the audit until dispositioned; `done`,
+`empty`, and `historical` are pre-filled and non-blocking. An unrecognized
+heading becomes `ambiguous`, not `historical` — the scanner defaults to
+blocking on what it doesn't recognize, never to treating it as already
+covered.
 
 ---
 

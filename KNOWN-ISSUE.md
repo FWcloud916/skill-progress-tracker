@@ -4,7 +4,8 @@
 
 ## KI-001 — Migration can miss actionable content outside the explicit WIP section
 
-**Status:** Open  
+**Status:** Resolved (2026-07-26) — see `docs/design-decisions.md` §"Script-gate
+migration inventory completeness (KI-001)"  
 **Detected:** 2026-07-26 during a real migration trial against
 `FWcloud916.github.io`  
 **Data loss:** None; the legacy source was not deleted
@@ -83,4 +84,30 @@ completeness**, not only equivalence of already mapped fields:
 - Historical/reference sections are disclosed before deletion.
 - The deletion question is asked only after content-completeness, semantic,
   tracker-consistency, pointer, and link audits all pass.
+
+### Resolution
+
+Fixed by two new `update_progress.py` subcommands — `migration-inventory` and
+`migration-audit` — plus `references/MIGRATION.template.md`. Full design
+rationale: `docs/design-decisions.md` §"Script-gate migration inventory
+completeness (KI-001)". Mapping to the items above:
+
+| Required resolution | How it's satisfied |
+|---|---|
+| 1. Section-by-section source inventory before mapping | `migration-inventory` scans the whole document via `scan_source()`; every section becomes one or more rows in `<tracker-dir>/_migrations/<slug>.md` before any destination is chosen |
+| 2. Stable comparison row + destination per actionable entry | Each entry gets a content-derived opaque ID (`entry_identity()`) stable across reformatting, with `Disposition`/`Destination` cells |
+| 3. Reconcile count/identity of actionable entries against destinations | `migration-audit`'s `reconcile()`: unaccounted source entries and stale record rows are both reported (R5/R6); a `migrated` Destination must be an existing tracker item slug (R10) |
+| 4. Ambiguous entries block until classified | Any heading matching neither `ACTIONABLE_HEADINGS` nor `HISTORICAL_HEADINGS` is `ambiguous`, which blocks identically to `actionable` (`BLOCKING_KINDS`) |
+| 5. Report historical/reference content before deletion | `migration-audit` unconditionally prints every historical section, and a sign-off box attests it was shown to the user |
+| 6. Eval case: `Now` empty, `Next steps`/backlog pending | `evals/scenarios/migration-gate-blocks-empty-now/` reproduces the exact incident shape and asserts the audit still fails; `evals/scenarios/migration-gate-opens-after-resolution/` is the resolved counterpart |
+
+Acceptance criteria: the KI-001 regression scenario and
+`test_fails_while_next_steps_unresolved_though_now_is_empty` in
+`test_update_progress.py` both assert the empty-`## Now` case cannot pass;
+`migration-audit` requires a `Disposition`/`Destination` per entry (not just
+"migrated or excluded" as a checkbox, but a resolvable value); historical
+disclosure is unconditional on every run; and the deletion question is only
+ever reached after `migration-audit` exits 0, which itself calls
+`audit_tracker()` (tracker-consistency) and requires the pointer/link/semantic
+sign-off boxes to be ticked.
 

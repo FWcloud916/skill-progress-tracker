@@ -201,6 +201,55 @@ tracking artifacts. Approval must identify the exact legacy target. Deletion
 is followed by the same consistency and pointer/link audits; declining keeps
 the source as a legacy record while live pointers remain on the new tracker.
 
+## 2026-07-26 — Script-gate migration inventory completeness (KI-001)
+
+The migration contract above turned out to be insufficient in practice: see
+`KNOWN-ISSUE.md` KI-001. A real migration trial against
+`FWcloud916.github.io` had a legacy `PROGRESS.md` whose `## Now` section said
+"Nothing in progress." The agent treated the active-content set as empty,
+reported that its content and pointer audits passed, and reached the deletion
+prompt — while `## Next steps` and an SEO/AI-SEO backlog it never inspected
+still held real, unmigrated work. The root cause was structural, not a
+one-off slip: the "audit" only compared fields already selected for mapping;
+nothing proved the source inventory itself was complete. And the entire
+contract was prose an agent follows, with no script checking it — so a
+passing `update_progress.py check` (tracker-internal consistency only)
+created false confidence about something it never looked at.
+
+The fix is two new `update_progress.py` subcommands, not more emphatic prose:
+
+- `migration-inventory <slug> --source <path>` scans a legacy source
+  **whole-document** and writes a reconciliation record to
+  `<tracker-dir>/_migrations/<slug>.md`. Every section is classified
+  `actionable`, `historical`, or — for anything neither keyword list
+  recognizes — `ambiguous`, which blocks exactly like `actionable`. This is
+  the direct fix: a heading nobody thought to add to a keyword list defaults
+  to blocking, not to being silently treated as already covered. An
+  unchecked `- [ ]` or inline `TODO`/`TBD` marker is actionable regardless of
+  its section, including inside a `## Done` heading.
+- `migration-audit <slug>` rescans the source and reconciles it against the
+  record. It is the deletion gate: it fails while any `actionable`/`ambiguous`
+  entry lacks a Disposition and Destination, any row's Kind was hand-edited,
+  any `migrated` Destination isn't an existing tracker item slug, the source
+  changed since the inventory was taken, or a human sign-off box (semantic
+  equivalence, pointer audit, link audit, historical disclosure, retention
+  choice) is unticked.
+
+**Honest limit:** the audit proves the destination *item exists*; it cannot
+prove the migrated entry's content actually landed there, or that a pointer
+was updated correctly. Those remain human-attested via the record's sign-off
+checklist — the script makes **inventory completeness** (the actual root
+cause) mechanical, not the whole migration audit. Presenting this as full
+automation would be dishonest about what it verifies.
+
+**Deliberately conservative `HISTORICAL_HEADINGS`:** every entry in that list
+is a suppression vector — a heading that should have blocked but silently
+didn't is exactly what KI-001 was. `ACTIONABLE_HEADINGS` can be generous
+because a false positive there only adds a row someone has to disposition;
+`HISTORICAL_HEADINGS` stays narrow because a false positive there reproduces
+the incident. Anything on neither list falls through to `ambiguous`, which
+blocks — so an incomplete list is safe by construction, never silently lossy.
+
 ## 2026-07-26 — Standardize on a single supported Python version (3.14)
 
 Supersedes the dual-version part of "2026-07-24 — Support Python 3.10 as the

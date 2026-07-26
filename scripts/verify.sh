@@ -31,6 +31,78 @@ marker=$(grep 'TABLE_HEADER_MARKER = ' "$SCRIPTS/new_progress.py" | sed -E 's/.*
 index_header=$(grep '^| Status |' "$REFS/INDEX.template.md" | head -1)
 report "$([ "$marker" = "$index_header" ]; echo $?)" "TABLE_HEADER_MARKER matches INDEX.template.md header" "script:[$marker] template:[$index_header]"
 
+# 2a. MIGRATION.template.md placeholders ({{X}}) must match update_progress.py's
+#     substitutions exactly (mirrors check 1, scoped to the migration template).
+mig_script_ph=$(grep -oE '\{\{[A-Z_]+\}\}' "$SCRIPTS/update_progress.py" | sort -u)
+mig_template_ph=$(grep -oE '\{\{[A-Z_]+\}\}' "$REFS/MIGRATION.template.md" | sort -u)
+mig_ph_diff=$(diff <(echo "$mig_script_ph") <(echo "$mig_template_ph"))
+report "$([ -z "$mig_ph_diff" ]; echo $?)" \
+  "update_progress.py/MIGRATION.template.md placeholders match exactly" "$mig_ph_diff"
+
+# 2b. MIGRATION_TABLE_HEADER in the script must equal the template's entry
+#     table header row (mirrors check 2), and every MIGRATION_* marker pair
+#     the script relies on must appear exactly once in the template.
+mig_table_ok=1
+python3 - <<'PY' && mig_table_ok=0
+import re
+from pathlib import Path
+
+script = Path("skills/progress-tracker/scripts/update_progress.py").read_text(encoding="utf-8")
+template = Path("skills/progress-tracker/references/MIGRATION.template.md").read_text(encoding="utf-8")
+
+script_header = re.search(r'MIGRATION_TABLE_HEADER = "(.*)"', script).group(1)
+template_header = next(
+    line for line in template.splitlines() if line.startswith("| ID | Kind |")
+)
+assert script_header == template_header, (
+    f"MIGRATION_TABLE_HEADER mismatch: script={script_header!r} template={template_header!r}"
+)
+
+for name in ("SOURCES", "DISPOSITIONS", "TABLE", "SIGNOFF"):
+    start = f"<!-- MIGRATION_{name}_START -->"
+    end = f"<!-- MIGRATION_{name}_END -->"
+    assert template.count(start) == 1 and template.count(end) == 1, f"marker pair {name}"
+    assert f'MIGRATION_{name}_START = "{start}"' in script, f"script constant for {name}"
+    assert f'MIGRATION_{name}_END = "{end}"' in script, f"script constant for {name}"
+PY
+report "$mig_table_ok" "MIGRATION_TABLE_HEADER and marker pairs match the template" "migration template validation failed"
+
+# 2c. The sign-off checklist labels and the Disposition enum documented in
+#     MIGRATION.template.md must match HUMAN_SIGNOFF_ITEMS / DISPOSITION_VALUES
+#     in the script — migration-audit greps these labels at runtime, so a
+#     one-character template edit would silently break the sign-off gate.
+mig_enum_ok=1
+python3 - <<'PY' && mig_enum_ok=0
+import re
+from pathlib import Path
+
+script = Path("skills/progress-tracker/scripts/update_progress.py").read_text(encoding="utf-8")
+template = Path("skills/progress-tracker/references/MIGRATION.template.md").read_text(encoding="utf-8")
+
+signoff_block = template[
+    template.index("<!-- MIGRATION_SIGNOFF_START -->") : template.index("<!-- MIGRATION_SIGNOFF_END -->")
+]
+labels = [
+    line[len("- [ ] ") :].strip()
+    for line in signoff_block.splitlines()
+    if line.strip().startswith("- [ ] ")
+]
+assert labels, "no sign-off items found in MIGRATION.template.md"
+signoff_tuple = re.search(r"HUMAN_SIGNOFF_ITEMS = \((.*?)\n\)", script, re.DOTALL).group(1)
+for label in labels:
+    assert f'"{label}"' in signoff_tuple, f"sign-off label not in HUMAN_SIGNOFF_ITEMS: {label!r}"
+
+dispositions_block = template[
+    template.index("<!-- MIGRATION_DISPOSITIONS_START -->") : template.index(
+        "<!-- MIGRATION_DISPOSITIONS_END -->"
+    )
+]
+documented = set(re.findall(r"^\| `([a-z-]+)`", dispositions_block, re.MULTILINE))
+declared = set(re.search(r"DISPOSITION_VALUES = \((.*?)\)", script).group(1).replace('"', "").replace(" ", "").rstrip(",").split(","))
+assert documented == declared, f"disposition enum drift: template={documented} script={declared}"
+PY
+report "$mig_enum_ok" "migration sign-off labels and disposition enum match the template" "migration enum validation failed"
+
 # 3. Status enum and transition diagram identical across SKILL.md,
 #    workflow.md, and INDEX.template.md.
 lifecycle_ok=1
@@ -73,6 +145,34 @@ assert expected_tuple in script, "update_progress.py status enum differs"
 PY
 report "$lifecycle_ok" "status enum and transition diagram match exactly" "lifecycle block validation failed"
 
+# 3b. The script-gated migration command sequence must be byte-identical
+#     across SKILL.md, workflow.md, and agents/progress-tracker.md (direct
+#     analogue of check 3) — this is the normative fix for KI-001, and it
+#     must not drift out of sync the way the prose-only contract did.
+mig_gate_ok=1
+python3 - <<'PY' && mig_gate_ok=0
+from pathlib import Path
+
+paths = [
+    Path("skills/progress-tracker/SKILL.md"),
+    Path("skills/progress-tracker/references/workflow.md"),
+    Path("agents/progress-tracker.md"),
+]
+start = "<!-- MIGRATION_GATE_START -->"
+end = "<!-- MIGRATION_GATE_END -->"
+blocks = []
+for path in paths:
+    text = path.read_text(encoding="utf-8")
+    assert text.count(start) == 1 and text.count(end) == 1, f"migration gate markers in {path}"
+    blocks.append(text[text.index(start) : text.index(end) + len(end)])
+assert all(block == blocks[0] for block in blocks[1:]), "migration gate blocks differ"
+assert "migration-inventory" in blocks[0] and "migration-audit" in blocks[0]
+
+script = Path("skills/progress-tracker/scripts/update_progress.py").read_text(encoding="utf-8")
+assert '"migration-inventory"' in script and '"migration-audit"' in script
+PY
+report "$mig_gate_ok" "migration gate command block matches exactly across docs" "migration gate block validation failed"
+
 # 4. Reference integrity. SKILL.md paths are relative to the skill root;
 #    README.md/AGENTS.md paths are repo-relative.
 dead_refs=""
@@ -100,6 +200,8 @@ sources = {
     Path("skills/progress-tracker/references/INDEX.template.md"): PurePosixPath("INDEX.md"),
     Path("skills/progress-tracker/references/PROGRESS.template.md"): PurePosixPath("_template/PROGRESS.md"),
     Path("skills/progress-tracker/references/plans-readme.md"): PurePosixPath("_plans/README.md"),
+    Path("skills/progress-tracker/references/MIGRATION.template.md"): PurePosixPath("_migrations/RECORD.md"),
+    Path("skills/progress-tracker/references/migrations-readme.md"): PurePosixPath("_migrations/README.md"),
 }
 available = {str(path) for path in sources.values()}
 link_re = re.compile(r"\]\(([^)]+)\)")
@@ -119,6 +221,8 @@ grep -q 'uv run <skill-dir>/scripts/new_progress.py' "$SKILL_MD" || portable_com
 grep -q 'uv run <skill-dir>/scripts/new_progress.py' "$REFS/tracker-readme.md" || portable_command_ok=1
 grep -q 'uv run <skill-dir>/scripts/update_progress.py' "$SKILL_MD" || portable_command_ok=1
 grep -q 'uv run <skill-dir>/scripts/update_progress.py' "$REFS/tracker-readme.md" || portable_command_ok=1
+grep -q 'uv run <skill-dir>/scripts/update_progress.py migration-audit' "$SKILL_MD" || portable_command_ok=1
+grep -q 'uv run <skill-dir>/scripts/update_progress.py migration-audit' "$REFS/tracker-readme.md" || portable_command_ok=1
 grep -qE 'uv run (scripts/new_progress.py|new_progress.py)' "$SKILL_MD" "$REFS/tracker-readme.md" \
   && portable_command_ok=1
 report "$portable_command_ok" "scaffold command uses the installed skill path" "found a cwd-relative command"

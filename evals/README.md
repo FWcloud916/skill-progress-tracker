@@ -9,8 +9,10 @@ is a deterministic script, not a model judgment call).
 1. **Lifecycle scenarios** run the real scaffold script end-to-end in a
    disposable git repository and grade filesystem/content invariants —
    creation, multi-scope expansion, escaped input, slug-namespaced plan
-   snapshots, lifecycle-script close-out, and contained custom
-   `--dir`/`--root` overrides.
+   snapshots, lifecycle-script close-out, contained custom `--dir`/`--root`
+   overrides, and the migration-inventory/migration-audit gate (including the
+   KI-001 regression: an empty "in progress" section must not make the audit
+   pass while a "Next steps" section it never inspected still holds work).
 2. **Trigger matrix** records the intended boundary for when an agent should
    (or should not) reach for this skill, including the boundary against
    doc-architect's differently-scoped `PROGRESS.md` harness module.
@@ -27,7 +29,7 @@ and to protect the grading logic itself from false-greening.
 ```
 evals/
 ├── README.md                  # this file
-├── scenarios/                 # 9 disposable-repo lifecycle scenarios
+├── scenarios/                 # 11 disposable-repo lifecycle scenarios
 │   └── */scenario.json        # steps (run/write/edit) + deterministic checks
 ├── trigger-matrix.json        # 9 positive + 4 negative/boundary prompts
 └── scripts/

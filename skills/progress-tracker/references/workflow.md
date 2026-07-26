@@ -52,32 +52,67 @@ user wants to migrate. Migration requires explicit approval. A declined
 migration preserves the existing mechanism; coexistence also requires an
 explicit user choice.
 
-An approved migration follows this contract:
+An approved migration follows this contract. It is **script-gated**, not a
+judgment call: a real migration trial once treated an empty "current work"
+section as proof a legacy source held no actionable content, while a
+"Next steps" section and a backlog it never inspected still held unmigrated
+work (see `KNOWN-ISSUE.md` KI-001 in the repository root for the incident this
+contract was hardened against). `migration-inventory` and `migration-audit`
+exist specifically so that judgment call is no longer load-bearing.
 
-1. Inventory source artifacts and all live pointers to them.
+1. Inventory source artifacts and all live pointers to them. Run
+   `migration-inventory <slug> --source <legacy-path>` to produce a
+   section-by-section inventory record at `<tracker-dir>/_migrations/<slug>.md`
+   — this scans the **whole document**, not just an "in progress" or "current
+   work" section, and defaults every unrecognized heading to `ambiguous`
+   (blocking) rather than assuming it is safe to ignore.
 2. Agree on a source-to-destination mapping; do not infer missing task facts.
 3. Keep the source unchanged and copy every in-progress concern into the new
    item(s): current status, scope, branch/ticket/plan references, goals,
    unfinished tasks, current work log, blockers, next actions, and live links.
-4. Compare source and destination field by field. Record each active source
-   field's destination, verify semantic equivalence, and explain mappings into
-   the canonical status or field structure. Missing or unexplained active
-   content fails the audit.
+   For each `actionable`/`ambiguous` row in the inventory record, fill in its
+   Disposition (`migrated`, `excluded`, `archived`, or `not-applicable`) and
+   Destination.
+4. Compare source and destination field by field. For each `migrated` row,
+   verify semantic equivalence with wherever it landed and tick the record's
+   corresponding sign-off box. Missing or unexplained active content — any
+   row still `TBD` — fails the audit.
 5. Update every live pointer: links, path mentions, agent instructions, command
    examples, scripts, and configuration.
 6. Run `update_progress.py check`, search the project for each old path/name,
    and verify every changed relative link resolves. Classify any remaining
-   match as an intentional historical/compatibility reference.
-7. Only when both the content comparison and pointer audit pass, show the audit
-   and ask whether to delete the original artifacts. If approved, remove only
-   the exact confirmed legacy targets, update affected pointers, and rerun all
-   three audits. If declined, retain the originals as legacy records while live
-   pointers continue to target the new tracker.
+   match as an intentional historical/compatibility reference, then tick the
+   record's remaining sign-off boxes (historical sections disclosed, pointer
+   audit passed, link audit passed).
+7. Run `migration-audit <slug>` — the deletion gate:
 
-The migration is not complete while active content is missing, the two records
-disagree, or an unreviewed stale pointer remains. The final report lists the
-active-content mapping, two-sided comparison, updated pointer files,
-intentional legacy references, and source-retention choice.
+<!-- MIGRATION_GATE_START -->
+Migration is script-gated. The deletion question MUST NOT be asked until both
+commands have run and the second exited 0:
+
+```bash
+uv run <skill-dir>/scripts/update_progress.py migration-inventory <slug> --source <legacy-path>
+uv run <skill-dir>/scripts/update_progress.py migration-audit <slug>
+```
+
+`migration-audit` fails while any actionable or ambiguous source entry lacks a
+disposition and destination. An empty WIP section is not evidence of an empty
+actionable set.
+<!-- MIGRATION_GATE_END -->
+
+   Only once `migration-audit` exits 0, show its output and ask whether to
+   delete the original artifacts. If approved, remove only the exact confirmed
+   legacy targets, update affected pointers, and rerun `migration-audit`,
+   `update_progress.py check`, and the old-reference/link audits. If declined,
+   retain the originals as legacy records while live pointers continue to
+   target the new tracker.
+
+The migration is not complete while `migration-audit` exits non-zero, active
+content is missing, the two records disagree, or an unreviewed stale pointer
+remains. The final report lists the migration record's location,
+`migration-audit`'s result, the historical/reference sections it disclosed,
+updated pointer files, intentional legacy references, and source-retention
+choice.
 
 ---
 
@@ -134,6 +169,9 @@ progress/
 ├── _plans/                            # version-controlled frozen plan snapshots (script's --plan copies here)
 │   ├── README.md
 │   └── subscription-refund-refund-flow-abstract-breeze.md
+├── _migrations/                       # only present once a migration-inventory has run
+│   ├── README.md
+│   └── legacy-progress-md.md          # inventory + reconciliation record; the deletion gate
 ├── 2026-06-17-subscription-refund/    # one development task (date prefix + kebab-case slug)
 │   └── PROGRESS.md                    # that task's progress record
 └── 2026-06-20-receipt-sync-fix/
@@ -235,9 +273,13 @@ its own.
 
 - Scripts and AI agents **MUST NOT** proactively delete current item folders or
   INDEX rows.
-- A migrated legacy source MAY be deleted only after all migration audits pass
-  and the user explicitly confirms the exact target. The agent MUST rerun the
-  consistency and pointer/link audits after deletion.
+- A migrated legacy source MAY be deleted only after `migration-audit` exits 0
+  and the user explicitly confirms the exact target. The agent MUST rerun
+  `migration-audit`, `update_progress.py check`, and the pointer/link audits
+  after deletion.
+- Do not delete a `<tracker-dir>/_migrations/<slug>.md` record while its
+  legacy source still exists — it is the audit trail proving the migration
+  was complete.
 - Other cleanup remains a **human decision**, performed manually as needed.
 - Consider keeping `done` / `abandoned` items around for at least one sprint
   for later reference and retrospectives.
@@ -250,8 +292,10 @@ its own.
 
 - Discover existing tracking artifacts and ask before migrating or scaffolding
   a parallel tracker
-- Copy every in-progress concern, then compare the source and destination
-  before changing or deleting the source
+- Run `migration-inventory` before copying anything — inventory the whole
+  source document, not just an "in progress" or "current work" section
+- Dispose of every `actionable`/`ambiguous` inventory row and run
+  `migration-audit` before asking whether to delete the source
 - Audit every old path/name and changed link after an approved migration
 - Preview with `--dry-run` before creating a task
 - Include **every scope entry involved** in `--scope`, even read-only ones
@@ -267,7 +311,11 @@ its own.
 
 - Don't treat silence as migration consent or leave stale pointers to the old
   tracking mechanism
-- Don't ask to delete the source until the content and pointer audits both pass
+- Don't ask to delete the source until `migration-audit` exits 0 — an empty
+  "in progress" section is not proof the rest of the document holds no
+  actionable content
+- Don't hand-edit a migration record's `ID`, `Kind`, `Source`, `Loc`, or
+  `Section` cells; re-run `migration-inventory` instead
 - Don't delete tracker-directory folders directly (update the INDEX status to
   `abandoned` first, then clean up manually)
 - Don't fill real content into `_template/PROGRESS.md` (the template should

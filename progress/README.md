@@ -72,8 +72,27 @@ uv run <skill-dir>/scripts/update_progress.py check
 Invoke the installed `progress-tracker` skill for the full workflow and
 allowed status transitions. Item list: [`INDEX.md`](INDEX.md).
 
+## Migrating an existing tracking mechanism
+
+If this project already has a separate tracker (a root `PROGRESS.md`,
+`WORKLOG.md`, etc.), do not copy its content by hand. Migration is
+script-gated so an empty "in progress" section can never be mistaken for an
+empty actionable set:
+
+```bash
+uv run <skill-dir>/scripts/update_progress.py migration-inventory <slug> --source <legacy-path>
+uv run <skill-dir>/scripts/update_progress.py migration-audit <slug>
+```
+
+`migration-inventory` scans the legacy source whole-document and writes a
+reconciliation record to `_migrations/<slug>.md`; `migration-audit` is the
+deletion gate — it fails while any entry lacks a disposition and destination.
+Invoke the installed `progress-tracker` skill for the full contract.
+
 ## Cleanup policy
 
 Tools and AI agents **do not** delete item folders automatically. Cleanup
 (deleting folders, removing INDEX rows) is a **manual, human decision**, done
-as needed.
+as needed. A migrated legacy source may be deleted only after
+`migration-audit` exits 0; a `_migrations/<slug>.md` record should not be
+deleted while its legacy source still exists.

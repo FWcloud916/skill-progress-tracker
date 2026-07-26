@@ -1,0 +1,42 @@
+{
+  "description": "KI-001 regression: the legacy source's 'Now' section says 'Nothing in progress', but 'Next steps' and an SEO backlog still hold pending work. migration-audit must keep the deletion gate closed instead of treating the empty WIP section as proof there is nothing left to migrate.",
+  "steps": [
+    {
+      "type": "write",
+      "path": "PROGRESS.md",
+      "content": "# Site progress\n\n## Now\n\nNothing in progress\n\n## Next steps\n\n- Add sitemap.xml generation\n- Wire up structured data\n\n## SEO backlog\n\n- [ ] Audit meta descriptions\n- [x] Submit to Search Console\n\n## Done\n\n- Shipped the new landing page\n\n## Decision log\n\n- Chose Jekyll over Hugo\n"
+    },
+    {
+      "type": "run",
+      "args": ["seo-backlog", "--scope", "site"]
+    },
+    {
+      "type": "run",
+      "script": "update",
+      "args": ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"]
+    },
+    {
+      "type": "run_expect_fail",
+      "script": "update",
+      "args": ["migration-audit", "legacy-progress"],
+      "expect_stderr_contains": "migration-audit failed"
+    }
+  ],
+  "checks": {
+    "files_exist": [
+      "PROGRESS.md",
+      "progress/_migrations/legacy-progress.md",
+      "progress/*-seo-backlog/PROGRESS.md"
+    ],
+    "content_contains": [
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "Add sitemap.xml generation"},
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "Wire up structured data"},
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "Audit meta descriptions"},
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "Nothing in progress"},
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "| historical |"}
+    ],
+    "content_count": [
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "| TBD | TBD |", "count": 3}
+    ]
+  }
+}

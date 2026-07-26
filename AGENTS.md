@@ -20,6 +20,22 @@ doubles as a Claude Code plugin (`.claude-plugin/`) and marketplace for it.
   `done`, `abandoned`) and its transition diagram identical across
   `SKILL.md`, `references/workflow.md`, and `references/INDEX.template.md`
   (source: scripts/verify.sh)
+- MUST keep `update_progress.py`'s migration `{{X}}` placeholder set in exact
+  sync with `references/MIGRATION.template.md`, and its `MIGRATION_TABLE_HEADER` /
+  `MIGRATION_*_START`/`_END` marker constants identical to the template's
+  header row and markers (source: scripts/verify.sh)
+- MUST keep `update_progress.py`'s `HUMAN_SIGNOFF_ITEMS` and
+  `DISPOSITION_VALUES` in exact sync with `references/MIGRATION.template.md`'s
+  sign-off checklist labels and Disposition table — `migration-audit` greps
+  these labels at runtime, so drift here breaks the gate silently
+  (source: scripts/verify.sh)
+- MUST keep the `<!-- MIGRATION_GATE_START/END -->` command-sequence block
+  byte-identical across `SKILL.md`, `references/workflow.md`, and
+  `agents/progress-tracker.md` (source: scripts/verify.sh)
+- MUST NOT let `migration-audit`'s deletion gate open on anything short of a
+  clean reconciliation — an unrecognized source heading MUST default to
+  blocking (`ambiguous`), never to being silently treated as already covered
+  (source: KNOWN-ISSUE.md KI-001, docs/design-decisions.md)
 - MUST NOT reintroduce ticket normalization (`#`-prefixing digits, or any
   other tracker-specific reformatting) — tickets are kept verbatim by design
   (source: docs/design-decisions.md)
@@ -61,6 +77,7 @@ single-line edits) can skip; do not pre-load all docs.
 | Changing lifecycle update, close-out, or audit behavior | [SKILL.md](skills/progress-tracker/SKILL.md) + [update_progress.py](skills/progress-tracker/scripts/update_progress.py) |
 | Changing the item template or INDEX shape | [PROGRESS.template.md](skills/progress-tracker/references/PROGRESS.template.md) + [INDEX.template.md](skills/progress-tracker/references/INDEX.template.md) |
 | Changing the status lifecycle | [SKILL.md](skills/progress-tracker/SKILL.md) §Status lifecycle + [workflow.md](skills/progress-tracker/references/workflow.md) |
+| Changing migration-inventory/migration-audit behavior or the record shape | [SKILL.md](skills/progress-tracker/SKILL.md) §Before creating anything + [MIGRATION.template.md](skills/progress-tracker/references/MIGRATION.template.md) + [KNOWN-ISSUE.md](KNOWN-ISSUE.md) KI-001 |
 | Changing eval scenarios or the trigger matrix | [evals/README.md](evals/README.md) |
 | Understanding why it's built this way | [docs/design-decisions.md](docs/design-decisions.md) |
 

@@ -19,6 +19,10 @@ def _load_module():
     spec = importlib.util.spec_from_file_location("update_progress", UPDATE_SCRIPT)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
+    # Register in sys.modules before exec: the module defines dataclasses, and
+    # Python's dataclasses machinery resolves annotations via
+    # sys.modules[cls.__module__] — without this, exec_module() raises.
+    sys.modules["update_progress"] = module
     sys.path.insert(0, str(SCRIPTS_DIR))
     try:
         spec.loader.exec_module(module)
@@ -346,3 +350,464 @@ class TestCheckCommand:
         assert created.returncode == 0, created.stderr
         result = run_script(UPDATE_SCRIPT, ["check", "--dir", "dev-log"], tmp_path)
         assert result.returncode == 0, result.stdout + result.stderr
+
+
+# ---------------------------------------------------------------------------
+# Migration inventory / audit (KNOWN-ISSUE.md KI-001)
+#
+# A real migration trial treated an empty "## Now" section as proof a legacy
+# source held no actionable content, while "## Next steps" and a backlog it
+# never inspected still held unmigrated work. These tests pin the scanner's
+# default-deny behavior and the audit's deletion gate.
+# ---------------------------------------------------------------------------
+
+LEGACY_SOURCE = """\
+# Site progress
+
+## Now
+
+Nothing in progress
+
+## Next steps
+
+- Add sitemap.xml generation
+- Wire up structured data
+
+## SEO backlog
+
+- [ ] Audit meta descriptions
+- [x] Submit to Search Console
+
+## Done
+
+- Shipped the new landing page
+
+## Decision log
+
+- Chose Jekyll over Hugo
+"""
+
+SIGNOFF_LABELS = up.HUMAN_SIGNOFF_ITEMS
+
+
+@pytest.fixture
+def legacy(project):
+    (project / "PROGRESS.md").write_text(LEGACY_SOURCE, encoding="utf-8")
+    return project
+
+
+def resolve_all_rows(record: Path, destination: str = "demo-task") -> None:
+    text = record.read_text(encoding="utf-8")
+    text = text.replace("| TBD | TBD |", f"| migrated | {destination} |")
+    record.write_text(text, encoding="utf-8")
+
+
+def tick_signoff(record: Path) -> None:
+    text = record.read_text(encoding="utf-8")
+    for label in SIGNOFF_LABELS:
+        text = text.replace(f"- [ ] {label}", f"- [x] {label}")
+    record.write_text(text, encoding="utf-8")
+
+
+class TestMigrationScanner:
+    def test_next_steps_bullets_are_actionable(self):
+        entries = up.scan_source(LEGACY_SOURCE, "PROGRESS.md")
+        next_steps = [e for e in entries if e.section.endswith("Next steps")]
+        assert len(next_steps) == 2
+        assert all(e.kind == "actionable" for e in next_steps)
+
+    def test_now_nothing_in_progress_is_empty_not_actionable(self):
+        entries = up.scan_source(LEGACY_SOURCE, "PROGRESS.md")
+        now_entries = [e for e in entries if e.section.endswith("Now")]
+        assert len(now_entries) == 1
+        assert now_entries[0].kind == "empty"
+        assert now_entries[0].kind not in up.BLOCKING_KINDS
+
+    def test_unchecked_box_in_done_section_is_actionable(self):
+        text = "## Done\n\n- Shipped v1\n- [ ] Backport the fix\n"
+        entries = up.scan_source(text, "src.md")
+        boxed = [e for e in entries if "Backport" in e.text]
+        assert len(boxed) == 1
+        assert boxed[0].kind == "actionable"
+
+    def test_checked_box_is_done(self):
+        entries = up.scan_source(LEGACY_SOURCE, "PROGRESS.md")
+        checked = [e for e in entries if "Submit to Search Console" in e.text]
+        assert len(checked) == 1
+        assert checked[0].kind == "done"
+
+    def test_unknown_heading_defaults_to_ambiguous(self):
+        text = "## Random musings\n\n- Something unclassified\n"
+        entries = up.scan_source(text, "src.md")
+        assert len(entries) == 1
+        assert entries[0].kind == "ambiguous"
+        assert entries[0].kind in up.BLOCKING_KINDS
+
+    def test_known_historical_heading_emits_one_row(self):
+        text = "## Decision log\n\n- Chose A\n- Chose B\n- Chose C\n- Chose D\n- Chose E\n"
+        entries = up.scan_source(text, "src.md")
+        assert len(entries) == 1
+        assert entries[0].kind == "historical"
+
+    def test_heading_matching_both_lists_resolves_actionable(self):
+        text = "## Completed tasks\n\n- Ship the thing\n"
+        entries = up.scan_source(text, "src.md")
+        assert len(entries) == 1
+        assert entries[0].kind == "actionable"
+
+    def test_nested_checkbox_becomes_its_own_entry(self):
+        text = "## Next steps\n\n- Parent item\n  - [ ] Child sub-task\n"
+        entries = up.scan_source(text, "src.md")
+        assert len(entries) == 2
+        assert any(e.text == "Child sub-task" and e.kind == "actionable" for e in entries)
+
+    def test_nested_plain_bullet_folds_into_parent(self):
+        text = "## Next steps\n\n- Parent item\n  - a clarifying detail\n"
+        entries = up.scan_source(text, "src.md")
+        assert len(entries) == 1
+        assert "a clarifying detail" in entries[0].text
+
+    def test_lazy_continuation_folds_into_parent(self):
+        text = "## Next steps\n\n- Parent item continues\n  onto the next line\n"
+        entries = up.scan_source(text, "src.md")
+        assert len(entries) == 1
+        assert "onto the next line" in entries[0].text
+
+    def test_code_fence_content_is_ignored(self):
+        text = "## Next steps\n\n```\n- [ ] not a real task\n```\n"
+        entries = up.scan_source(text, "src.md")
+        assert entries == []
+
+    def test_html_comment_content_is_ignored(self):
+        text = "## Next steps\n\n<!-- - [ ] commented out -->\n"
+        entries = up.scan_source(text, "src.md")
+        assert entries == []
+
+    def test_heading_scope_ends_at_same_or_higher_level(self):
+        text = "## Next steps\n\n### Later\n\n- deferred item\n\n## Done\n\n- shipped\n"
+        entries = up.scan_source(text, "src.md")
+        deferred = next(e for e in entries if "deferred item" in e.text)
+        assert deferred.kind == "actionable"
+        done = next(e for e in entries if e.kind == "historical")
+        assert "Done" in done.section
+
+    def test_subheading_inherits_parent_classification(self):
+        text = "## Next steps\n\n### Later\n\n- deferred item\n"
+        entries = up.scan_source(text, "src.md")
+        assert len(entries) == 1
+        assert entries[0].kind == "actionable"
+
+    def test_table_data_row_in_actionable_section_is_an_entry(self):
+        text = "## Backlog\n\n| Task | Status |\n|---|---|\n| Fix X | open |\n| Fix Y | open |\n"
+        entries = up.scan_source(text, "src.md")
+        assert len(entries) == 2
+        assert {e.text for e in entries} == {"Fix X", "Fix Y"}
+
+    def test_preamble_is_ambiguous(self):
+        text = "Some intro prose with no heading yet.\n\n## Done\n\n- shipped\n"
+        entries = up.scan_source(text, "src.md")
+        preamble = next(e for e in entries if e.section == "(preamble)")
+        assert preamble.kind == "ambiguous"
+
+    def test_entry_id_is_stable_across_reformatting(self):
+        a = up.scan_source("## Next steps\n\n- Add sitemap.xml generation\n", "src.md")
+        b = up.scan_source("## Next steps\n\n*   **Add sitemap.xml generation**\n", "src.md")
+        assert a[0].entry_id == b[0].entry_id
+
+    def test_entry_id_disambiguates_duplicate_text(self):
+        entries = up.scan_source("## Next steps\n\n- Same text\n- Same text\n", "src.md")
+        assert len({e.entry_id for e in entries}) == 2
+
+    def test_entry_id_changes_when_text_changes(self):
+        a = up.scan_source("## Next steps\n\n- Original text\n", "src.md")
+        b = up.scan_source("## Next steps\n\n- Edited text\n", "src.md")
+        assert a[0].entry_id != b[0].entry_id
+
+
+class TestMigrationInventoryCommand:
+    def test_creates_record_with_every_actionable_entry(self, legacy):
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        assert result.returncode == 0, result.stderr
+        record = legacy / "progress" / "_migrations" / "legacy-progress.md"
+        content = record.read_text()
+        assert content.count("| TBD | TBD |") == 3
+        assert "Add sitemap.xml generation" in content
+        assert "Wire up structured data" in content
+        assert "Audit meta descriptions" in content
+
+    def test_seeds_non_blocking_rows_without_tbd(self, legacy):
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        content = (legacy / "progress" / "_migrations" / "legacy-progress.md").read_text()
+        assert "| not-applicable | — |" in content  # `empty`/`done` rows
+        assert "| archived | — |" in content  # `historical` rows
+
+    def test_refuses_source_outside_project_root(self, legacy, tmp_path):
+        outside = tmp_path.parent / "outside.md"
+        outside.write_text("## Next steps\n\n- x\n")
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "../outside.md"],
+            legacy,
+        )
+        assert result.returncode != 0
+        assert "must resolve inside the project root" in result.stderr
+
+    def test_refuses_source_inside_tracker_dir(self, legacy):
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "progress/INDEX.md"],
+            legacy,
+        )
+        assert result.returncode != 0
+        assert "must not point inside the tracker directory" in result.stderr
+
+    def test_refuses_source_with_no_entries(self, legacy):
+        (legacy / "empty.md").write_text("# Title\n")
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "empty.md"],
+            legacy,
+        )
+        assert result.returncode != 0
+        assert "produced no entries" in result.stderr
+
+    def test_refuses_invalid_slug(self, legacy):
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "Bad_Slug", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        assert result.returncode != 0
+
+    def test_dry_run_writes_nothing(self, legacy):
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md", "--dry-run"],
+            legacy,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "[dry-run] No files written." in result.stdout
+        assert not (legacy / "progress" / "_migrations").exists()
+
+    def test_rerun_preserves_filled_dispositions(self, legacy):
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        record = legacy / "progress" / "_migrations" / "legacy-progress.md"
+        resolve_all_rows(record)
+        (legacy / "PROGRESS.md").write_text(
+            LEGACY_SOURCE.replace(
+                "- Wire up structured data\n",
+                "- Wire up structured data\n- Add a robots.txt entry\n",
+            )
+        )
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "Refresh:  7 preserved, 0 removed" in result.stdout
+        content = record.read_text()
+        assert content.count("| migrated | demo-task |") == 3
+        assert "| TBD | TBD |" in content  # the newly added entry
+
+    def test_rerun_drops_vanished_rows(self, legacy):
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        (legacy / "PROGRESS.md").write_text(
+            LEGACY_SOURCE.replace("- Wire up structured data\n", "")
+        )
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        assert result.returncode == 0, result.stderr
+        content = (legacy / "progress" / "_migrations" / "legacy-progress.md").read_text()
+        assert "Wire up structured data" not in content
+
+    def test_directory_source_is_scanned_recursively(self, legacy):
+        nested = legacy / "notes" / "sub"
+        nested.mkdir(parents=True)
+        (nested / "todo.md").write_text("## Next steps\n\n- Nested task\n")
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "notes"],
+            legacy,
+        )
+        assert result.returncode == 0, result.stderr
+        content = (legacy / "progress" / "_migrations" / "legacy-progress.md").read_text()
+        assert "Nested task" in content
+
+    def test_migrations_dir_is_ignored_by_check(self, legacy):
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        result = run_script(UPDATE_SCRIPT, ["check"], legacy)
+        assert result.returncode == 0, result.stdout + result.stderr
+
+
+class TestMigrationAuditCommand:
+    def _inventory(self, legacy: Path) -> Path:
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        return legacy / "progress" / "_migrations" / "legacy-progress.md"
+
+    def test_fails_while_next_steps_unresolved_though_now_is_empty(self, legacy):
+        self._inventory(legacy)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "is unresolved" in result.stdout
+        assert "migration-audit failed" in result.stderr
+        assert "Deletion gate: CLOSED" in result.stdout
+
+    def test_fails_when_record_missing(self, legacy):
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "migration record not found" in result.stderr
+
+    def test_fails_when_ambiguous_entry_unclassified(self, legacy):
+        (legacy / "PROGRESS.md").write_text("## Random musings\n\n- Something unclassified\n")
+        record = self._inventory(legacy)
+        tick_signoff(record)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "(ambiguous) is unresolved" in result.stdout
+
+    def test_fails_when_migrated_row_has_no_destination(self, legacy):
+        record = self._inventory(legacy)
+        text = record.read_text().replace("| TBD | TBD |", "| migrated | TBD |")
+        record.write_text(text)
+        tick_signoff(record)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "requires a Destination" in result.stdout
+
+    def test_fails_when_excluded_row_has_no_reason(self, legacy):
+        record = self._inventory(legacy)
+        text = record.read_text().replace("| TBD | TBD |", "| excluded | — |")
+        record.write_text(text)
+        tick_signoff(record)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "requires a reason" in result.stdout
+
+    def test_fails_when_destination_slug_does_not_exist(self, legacy):
+        record = self._inventory(legacy)
+        resolve_all_rows(record, destination="ghost-item")
+        tick_signoff(record)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "not an existing tracker item slug" in result.stdout
+
+    def test_fails_when_kind_edited_by_hand(self, legacy):
+        record = self._inventory(legacy)
+        text = record.read_text().replace(
+            "| actionable | `PROGRESS.md` | 9 |", "| historical | `PROGRESS.md` | 9 |"
+        )
+        record.write_text(text)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "Kind was hand-edited" in result.stdout
+
+    def test_fails_when_source_gains_a_new_entry(self, legacy):
+        record = self._inventory(legacy)
+        resolve_all_rows(record)
+        tick_signoff(record)
+        (legacy / "PROGRESS.md").write_text(
+            LEGACY_SOURCE.replace(
+                "- Wire up structured data\n",
+                "- Wire up structured data\n- A brand new task\n",
+            )
+        )
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "unaccounted source entry" in result.stdout
+
+    def test_fails_when_source_changed_after_inventory(self, legacy):
+        record = self._inventory(legacy)
+        resolve_all_rows(record)
+        tick_signoff(record)
+        (legacy / "PROGRESS.md").write_text(LEGACY_SOURCE + "\n")
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "source changed since the inventory" in result.stdout
+
+    def test_fails_when_signoff_boxes_unticked(self, legacy):
+        record = self._inventory(legacy)
+        resolve_all_rows(record)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "sign-off not confirmed" in result.stdout
+
+    def test_fails_when_tracker_inconsistent(self, legacy):
+        record = self._inventory(legacy)
+        resolve_all_rows(record)
+        tick_signoff(record)
+        index = legacy / "progress" / "INDEX.md"
+        index.write_text(index.read_text().replace("`planning`", "`blocked`", 1))
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "tracker: " in result.stdout
+
+    def test_passes_when_every_entry_resolved_and_signed_off(self, legacy):
+        record = self._inventory(legacy)
+        resolve_all_rows(record)
+        tick_signoff(record)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "Deletion gate: OPEN" in result.stdout
+
+    def test_prints_historical_disclosure_on_pass_and_fail(self, legacy):
+        record = self._inventory(legacy)
+        failing = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert "Decision log" in failing.stdout
+        resolve_all_rows(record)
+        tick_signoff(record)
+        passing = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert "Decision log" in passing.stdout
+
+    def test_custom_tracker_dir(self, tmp_path):
+        init_git_repo(tmp_path)
+        created = run_script(NEW_SCRIPT, ["demo-task", "--scope", "api", "--dir", "dev-log"], tmp_path)
+        assert created.returncode == 0, created.stderr
+        (tmp_path / "PROGRESS.md").write_text(LEGACY_SOURCE, encoding="utf-8")
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md", "--dir", "dev-log"],
+            tmp_path,
+        )
+        record = tmp_path / "dev-log" / "_migrations" / "legacy-progress.md"
+        resolve_all_rows(record)
+        tick_signoff(record)
+        result = run_script(
+            UPDATE_SCRIPT, ["migration-audit", "legacy-progress", "--dir", "dev-log"], tmp_path
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_audit_writes_nothing(self, legacy):
+        record = self._inventory(legacy)
+        resolve_all_rows(record)
+        tick_signoff(record)
+        before = record.read_text()
+        run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert record.read_text() == before

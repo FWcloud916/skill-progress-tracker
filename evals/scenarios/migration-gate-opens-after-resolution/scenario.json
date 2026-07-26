@@ -1,0 +1,78 @@
+{
+  "description": "Once every actionable entry has a disposition and destination and the human sign-off boxes are ticked, migration-audit passes and opens the deletion gate — the flip side of migration-gate-blocks-empty-now.",
+  "steps": [
+    {
+      "type": "write",
+      "path": "PROGRESS.md",
+      "content": "# Site progress\n\n## Now\n\nNothing in progress\n\n## Next steps\n\n- Add sitemap.xml generation\n- Wire up structured data\n\n## SEO backlog\n\n- [ ] Audit meta descriptions\n- [x] Submit to Search Console\n\n## Done\n\n- Shipped the new landing page\n\n## Decision log\n\n- Chose Jekyll over Hugo\n"
+    },
+    {
+      "type": "run",
+      "args": ["seo-backlog", "--scope", "site"]
+    },
+    {
+      "type": "run",
+      "script": "update",
+      "args": ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"]
+    },
+    {
+      "type": "edit",
+      "glob": "progress/_migrations/legacy-progress.md",
+      "find": "| TBD | TBD |",
+      "replace": "| migrated | seo-backlog |"
+    },
+    {
+      "type": "edit",
+      "glob": "progress/_migrations/legacy-progress.md",
+      "find": "- [ ] The historical/reference sections listed by `migration-audit` were shown to the user",
+      "replace": "- [x] The historical/reference sections listed by `migration-audit` were shown to the user"
+    },
+    {
+      "type": "edit",
+      "glob": "progress/_migrations/legacy-progress.md",
+      "find": "- [ ] Every migrated entry was checked for semantic equivalence against its destination",
+      "replace": "- [x] Every migrated entry was checked for semantic equivalence against its destination"
+    },
+    {
+      "type": "edit",
+      "glob": "progress/_migrations/legacy-progress.md",
+      "find": "- [ ] The pointer audit passed: every live reference to the legacy source was updated",
+      "replace": "- [x] The pointer audit passed: every live reference to the legacy source was updated"
+    },
+    {
+      "type": "edit",
+      "glob": "progress/_migrations/legacy-progress.md",
+      "find": "- [ ] The link audit passed: every changed relative link resolves",
+      "replace": "- [x] The link audit passed: every changed relative link resolves"
+    },
+    {
+      "type": "edit",
+      "glob": "progress/_migrations/legacy-progress.md",
+      "find": "- [ ] The user chose whether to retain or delete the legacy source",
+      "replace": "- [x] The user chose whether to retain or delete the legacy source"
+    },
+    {
+      "type": "run",
+      "script": "update",
+      "args": ["migration-audit", "legacy-progress"]
+    },
+    {
+      "type": "run",
+      "script": "update",
+      "args": ["check"]
+    }
+  ],
+  "checks": {
+    "files_exist": [
+      "PROGRESS.md",
+      "progress/_migrations/legacy-progress.md"
+    ],
+    "content_contains": [
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "| migrated | seo-backlog |"}
+    ],
+    "content_not_contains": [
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "| TBD | TBD |"},
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "{{"}
+    ]
+  }
+}
