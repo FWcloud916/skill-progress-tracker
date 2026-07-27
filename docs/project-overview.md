@@ -51,10 +51,6 @@ The repository is also a plugin distribution root:
 - [`agents/progress-tracker.md`](../agents/progress-tracker.md) provides the dedicated
   Claude Code agent definition.
 
-Kdan Mobile's internal `progress-note` skill is a sibling implementation, not a runtime
-dependency. The generic skill deliberately omits that sibling's workspace paths and
-ticket-system assumptions.
-
 ### 1.3 Deprecated / Retired or Not-Yet-Enabled Features
 
 - **Migration schema v1 is upgrade-only.** `migration-inventory` can read a v1 record

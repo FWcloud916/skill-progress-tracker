@@ -80,7 +80,7 @@ class TestNormalizeTicket:
         assert np.normalize_ticket(None, default="TBD") == "TBD"
 
     def test_verbatim_no_normalization(self):
-        # Unlike the Kdan-specific predecessor, pure digits are NOT '#'-prefixed.
+        # Pure digits stay verbatim and are not prefixed with '#'.
         assert np.normalize_ticket("111") == "111"
         assert np.normalize_ticket("JIRA-111") == "JIRA-111"
         assert np.normalize_ticket("#111") == "#111"
@@ -104,7 +104,7 @@ class TestParseScope:
 
     def test_no_directory_validation(self, tmp_path, monkeypatch):
         # A scope name that does NOT exist as a directory anywhere must still
-        # be accepted — this is the key de-Kdan-ification of --services.
+        # be accepted because scope labels are filesystem-independent.
         monkeypatch.chdir(tmp_path)
         entries = np.parse_scope("totally-made-up-service-name")
         assert entries[0][0] == "totally-made-up-service-name"

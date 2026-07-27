@@ -26,13 +26,6 @@ Item list: `<tracker-dir>/INDEX.md`
 Template:  `<tracker-dir>/_template/PROGRESS.md`
 Migration record template: `references/MIGRATION.template.md`
 
-> If you're inside Kdan Mobile's `kdan-workflow` workspace, use the
-> workspace-specific `progress-note` skill instead — it wires into that
-> workspace's ticket system and multi-service layout. This skill is the
-> generic, workspace-independent sibling for any other project.
-
----
-
 ## Before creating anything: existing-tracker preflight
 
 Before running `new_progress.py` or writing tracker files, inspect the target

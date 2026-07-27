@@ -327,14 +327,11 @@ description_words=$(awk 'NR >= 4 { if ($0 == "---") exit; print }' "$SKILL_MD" |
 report "$([ "$description_words" -ge 40 ] && [ "$description_words" -le 160 ]; echo $?)" \
   "SKILL.md trigger description stays concise" "$description_words words (expected 40..160)"
 
-# 12. No leftover Kdan-specific coupling residue in the parts of the skill
-#     that get scaffolded/copied into a user's project (references/, the
-#     script). SKILL.md/README.md/AGENTS.md/docs/design-decisions.md are
-#     excluded — they legitimately *discuss* these terms as history/rationale
-#     or as the one intentional cross-reference to the Kdan-internal sibling.
-kdan_residue=$(grep -rniE 'redmine|gitlab|kdan|ticket-sync|~/\.claude/plans|~/Documents/projects|WORKSPACE_ROOT' \
+# 12. No leftover workspace-specific coupling residue in the parts of the
+#     skill that get scaffolded or copied into a user's project.
+coupling_residue=$(grep -rniE 'redmine|gitlab|ticket-sync|~/\.claude/plans|~/Documents/projects|WORKSPACE_ROOT' \
   "$REFS"/*.md "$SCRIPTS"/new_progress.py "$SCRIPTS"/update_progress.py 2>/dev/null)
-report "$([ -z "$kdan_residue" ]; echo $?)" "no leftover Kdan-specific coupling residue in references/scripts" "$kdan_residue"
+report "$([ -z "$coupling_residue" ]; echo $?)" "no leftover workspace-specific coupling residue in references/scripts" "$coupling_residue"
 
 # 13. Trigger matrix shape (if present).
 if [ -f evals/trigger-matrix.json ]; then

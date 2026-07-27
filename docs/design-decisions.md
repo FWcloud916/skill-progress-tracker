@@ -95,32 +95,30 @@ local verification MUST use the same pinned version (`uvx ruff==0.16.0 check .`)
 since its version (and therefore its default rule set) isn't guaranteed to
 match CI's.
 
-## 2026-07-24 — Extracted from Kdan Mobile's `progress-note` skill
+## 2026-07-24 — Adopt project-agnostic inputs and discovery
 
-`progress-tracker` generalizes Kdan Mobile's internal `kdan-workflow` repo's
-`progress-note` skill into a standalone, project-agnostic skill — the same
-treatment `project-docs` (Kdan) received when it was generalized into
-`doc-architect`. The relationship to the Kdan-internal skill is a **sibling
-cross-reference, not a wrapper**: `progress-note` keeps its workspace-specific
-behavior untouched; `progress-tracker` has no dependency on it.
+`progress-tracker` is a standalone, project-agnostic skill. Its public inputs,
+root discovery, planning integration, and generated documents deliberately
+avoid assumptions about a particular workspace, issue tracker, agent runtime,
+or spoken language.
 
 ### What was genericized, and why
 
-| Kdan-specific behavior | Generic replacement | Why |
+| Workspace-specific behavior | Generic replacement | Why |
 |---|---|---|
 | `--services name` validated as a directory under a fixed workspace root | `--scope name` — free-form label, no filesystem validation | The workspace-root/sibling-directory assumption doesn't hold for an arbitrary project; a scope is just a label for a piece of work |
-| Redmine `#`-digit ticket normalization | Tickets kept **verbatim** | Baking in one tracker's numbering convention (Redmine serials) would misrepresent Jira keys, GitHub issue URLs, or anything else |
-| Bare-filename plan resolution defaulting to `~/.claude/plans` then a `ticket-sync` state directory | Bare filename resolved only via the explicit `$PROGRESS_TRACKER_PLANS_DIR` env var; otherwise the caller must pass a path | Hardcoding one tool's output directory as a default silently couples this skill to that tool's install; an explicit opt-in env var keeps the convenience without the coupling |
-| Self-location via a workspace symlink trick (`__file__.absolute()` → a `WORKSPACE_ROOT` a sibling `config.env` defines) | Project root = `--root` > `git rev-parse --show-toplevel` > cwd | No generic project has this repo's symlink layout; git-toplevel detection is the standard convention-over-configuration answer |
-| Cross-references to `ticket-sync`, `finish-ticket`, `/finish-ticket` | Removed entirely | Those are Kdan-workflow-internal skills; a generic skill must be usable with zero other skills installed |
-| Chinese field/section names and the exact Chinese `INDEX.md` header-marker string | English throughout | The generic skill targets any project/team, not a Traditional-Chinese-speaking one |
+| Numeric ticket normalization | Tickets kept **verbatim** | Baking in one tracker's numbering convention would misrepresent issue keys, URLs, or other references |
+| Bare-filename plan resolution through implicit agent-specific directories | Bare filename resolved only via the explicit `$PROGRESS_TRACKER_PLANS_DIR` env var; otherwise the caller must pass a path | Hardcoding one tool's output directory silently couples the skill to that tool's install; an explicit opt-in env var preserves convenience without the coupling |
+| Self-location through workspace-specific symlinks and configuration | Project root = `--root` > `git rev-parse --show-toplevel` > cwd | Git top-level detection provides a portable convention without assuming a repository layout |
+| Cross-references to unrelated workflow skills | Removed entirely | A generic skill must be usable with zero companion skills installed |
+| Workspace-specific field and section language | English throughout | The generic skill targets any project or team |
 
 ### Deliberately kept
 
 - **Multi-scope tracking.** The user explicitly wanted to preserve
   cross-scope task tracking (the most distinctive feature versus a plain
-  single-project worklog) — just de-Kdan'd. A single-scope project is simply
-  one `--scope` entry.
+  single-project worklog). A single-scope project is simply one `--scope`
+  entry.
 - **The plan-snapshot mechanism** (`--plan` copies a plan file into a
   version-controlled `_plans/` directory). The rationale carries over
   unchanged: planning-tool output locations vary and aren't always
@@ -157,11 +155,9 @@ Consequences:
 
 ## Tracker directory naming
 
-Defaults to `progress/` at the project root (matching the Kdan predecessor's
-`progress_note/` in spirit, shortened since the generic skill has no
-workspace-level "note" concept to disambiguate from). Configurable via
-`--dir` or `$PROGRESS_TRACKER_DIR` for projects that already use that name
-for something else, or prefer a dotfile (`.progress/`).
+Defaults to `progress/` at the project root. It is configurable via `--dir`
+or `$PROGRESS_TRACKER_DIR` for projects that already use that name for
+something else, or prefer a dot-directory (`.progress/`).
 
 ## Portable script invocation
 

@@ -138,13 +138,6 @@ uv run skills/progress-tracker/scripts/update_progress.py close subscription-ref
 uv run skills/progress-tracker/scripts/update_progress.py check
 ```
 
-## In a Kdan Mobile workspace?
-
-Kdan Mobile's internal `kdan-workflow` repo ships a workspace-specific
-sibling skill, `progress-note`, wired into that workspace's ticket system and
-multi-service layout. Use that one there; use `progress-tracker` everywhere
-else.
-
 ## Develop
 
 Working on the skill itself? Read [AGENTS.md](AGENTS.md) first, then verify

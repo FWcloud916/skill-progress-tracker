@@ -63,10 +63,7 @@ python3 evals/scripts/test_grade_scenarios.py                                   
 - Enhance over rewrite: extend existing tables/sections; restructure only
   when scale justifies it.
 - Requirement keywords (MUST/SHOULD/MAY) follow RFC 2119, uppercase.
-- English throughout — templates, field names, section headings. (This skill
-  is the generic, workspace-independent sibling of Kdan Mobile's internal
-  `progress-note` skill, which stays in Traditional Chinese for that
-  workspace.)
+- English throughout — templates, field names, and section headings.
 
 ## Docs maintenance
 
