@@ -152,7 +152,7 @@ any change:
 
 ```bash
 bash scripts/verify.sh                                                          # consistency gate
-uv run --with pytest python3 -m pytest skills/progress-tracker/scripts/ -v      # unit + integration tests
+uv run --python 3.14 --with pytest python3 -m pytest skills/progress-tracker/scripts/ -v  # unit + integration tests
 python3 evals/scripts/test_grade_scenarios.py                                    # free scenario grader tests
 python3 evals/scripts/run_scenarios.py                                           # end-to-end lifecycle scenarios
 ```
@@ -172,7 +172,7 @@ progress-tracker/
 │       └── scripts/      # create/update/check CLIs + their pytest suites
 ├── agents/           # dedicated agent definition (preloads the skill)
 ├── AGENTS.md         # maintainer guide for this repo (CLAUDE.md is a symlink to it)
-├── docs/             # design-decisions.md — why the skill is built this way
+├── docs/             # architecture, domain, coding-style, and design-decision references
 ├── scripts/          # verify.sh — consistency gate for changes to this repo
 └── evals/            # lifecycle scenarios + trigger matrix
 ```
@@ -181,6 +181,9 @@ progress-tracker/
 
 | Doc | What it covers |
 |---|---|
+| [docs/project-overview.md](docs/project-overview.md) | Architecture, CLI surfaces, directory layout, packaging, and environments |
+| [docs/domain-models.md](docs/domain-models.md) | Progress records, lifecycle transitions, audits, and migration reconciliation |
+| [docs/coding-style.md](docs/coding-style.md) | Ruff configuration, code conventions, safety patterns, and verification commands |
 | [SKILL.md](skills/progress-tracker/SKILL.md) | Lifecycle stages, scaffold-script arguments, status enum |
 | [AGENTS.md](AGENTS.md) | Maintainer guide: hard constraints, the verify gate |
 | [docs/design-decisions.md](docs/design-decisions.md) | Decision log with rationale: generic scope model, script-first eval strategy |
