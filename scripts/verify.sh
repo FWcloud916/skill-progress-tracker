@@ -232,22 +232,68 @@ grep -qE 'uv run (scripts/new_progress.py|new_progress.py)' "$SKILL_MD" "$REFS/t
   && portable_command_ok=1
 report "$portable_command_ok" "scaffold command uses the installed skill path" "found a cwd-relative command"
 
-# 7. Plugin manifests: parseable, names consistent with the skill layout.
+# 7. Claude Code and Codex plugin manifests: parseable, version-aligned, and
+#    consistent with their marketplace layouts.
 plugin_ok=1
 if command -v python3 >/dev/null 2>&1; then
   python3 - <<'PY' && plugin_ok=0
 import json
-p = json.load(open(".claude-plugin/plugin.json"))
-m = json.load(open(".claude-plugin/marketplace.json"))
-assert p["name"] == "progress-tracker", "plugin.json name"
-assert any(e["name"] == "progress-tracker" for e in m["plugins"]), "marketplace entry"
-parts = p["version"].split(".")
-assert len(parts) == 3 and all(part.isdigit() for part in parts), "plugin.json semver"
+from pathlib import Path
+
+claude = json.load(open(".claude-plugin/plugin.json"))
+claude_marketplace = json.load(open(".claude-plugin/marketplace.json"))
+codex = json.load(open(".codex-plugin/plugin.json"))
+codex_marketplace = json.load(open(".agents/plugins/marketplace.json"))
+
+assert claude["name"] == codex["name"] == "progress-tracker", "plugin names"
+assert claude["version"] == codex["version"], "Claude/Codex plugin versions differ"
+parts = claude["version"].split(".")
+assert len(parts) == 3 and all(part.isdigit() for part in parts), "strict plugin semver"
+assert any(
+    entry["name"] == "progress-tracker" for entry in claude_marketplace["plugins"]
+), "Claude marketplace entry"
+
+assert codex["skills"] == "./skills/", "Codex skills path"
+assert Path("skills/progress-tracker/SKILL.md").is_file()
+assert "apps" not in codex and "mcpServers" not in codex and "hooks" not in codex
+interface = codex["interface"]
+required_interface = {
+    "displayName",
+    "shortDescription",
+    "longDescription",
+    "developerName",
+    "category",
+    "capabilities",
+    "defaultPrompt",
+}
+assert required_interface <= interface.keys(), "Codex interface metadata"
+assert isinstance(interface["capabilities"], list)
+assert 1 <= len(interface["defaultPrompt"]) <= 3
+assert all(
+    isinstance(prompt, str) and 0 < len(prompt) <= 128
+    for prompt in interface["defaultPrompt"]
+)
+
+assert codex_marketplace["name"] == "progress-tracker"
+entry = next(
+    entry
+    for entry in codex_marketplace["plugins"]
+    if entry["name"] == "progress-tracker"
+)
+assert entry["source"] == {
+    "source": "local",
+    "path": "./",
+}
+assert entry["policy"] == {
+    "installation": "AVAILABLE",
+    "authentication": "ON_INSTALL",
+}
+assert entry["category"] == "Productivity"
 PY
 else
   plugin_ok=0  # python3 unavailable — skip rather than fail
 fi
-report "$plugin_ok" "plugin manifests parse and name progress-tracker" ""
+report "$plugin_ok" "Claude/Codex plugin manifests and marketplaces are consistent" ""
 
 # 8. Codex agents/openai.yaml metadata is complete.
 openai_yaml_ok=1

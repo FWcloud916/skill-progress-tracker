@@ -1,9 +1,10 @@
 # progress-tracker — Agent Guide
 
 An agent skill that tracks local development progress across single- or
-multi-scope tasks for any project. The skill itself lives in
+multi-scope tasks for any project. The canonical skill lives in
 `skills/progress-tracker/` (SKILL.md + references/ + scripts/); the repo
-doubles as a Claude Code plugin (`.claude-plugin/`) and marketplace for it.
+doubles as a Claude Code plugin (`.claude-plugin/`) and a native Codex plugin
+with a repo marketplace (`.codex-plugin/` + `.agents/plugins/`).
 
 ## Hard constraints
 
@@ -62,8 +63,13 @@ doubles as a Claude Code plugin (`.claude-plugin/`) and marketplace for it.
   lifecycle mutations and audits are deterministic and MUST remain covered
   (source: docs/design-decisions.md)
 - MUST edit `AGENTS.md`, never `CLAUDE.md` (symlink)
-- User-visible skill changes MUST bump `version` in `.claude-plugin/plugin.json`
+- User-visible skill changes MUST bump `version` in both
+  `.claude-plugin/plugin.json` and
+  `.codex-plugin/plugin.json`, keeping them identical
   — plugin users only receive updates on a version bump (source: plugins reference)
+- MUST keep `.agents/plugins/marketplace.json`'s `progress-tracker` source at
+  `./`, with explicit `AVAILABLE` installation,
+  `ON_INSTALL` authentication, and `Productivity` category policy
 - MUST lint with the exact ruff version pinned in `.github/workflows/ci.yml`
   (`uvx ruff==<pinned version> check .`), not a locally installed `ruff`
   binary — a stale local install can silently under-report (ruff has changed
@@ -83,6 +89,7 @@ single-line edits) can skip; do not pre-load all docs.
 | Changing the status lifecycle | [SKILL.md](skills/progress-tracker/SKILL.md) §Status lifecycle + [workflow.md](skills/progress-tracker/references/workflow.md) |
 | Changing migration-inventory/migration-audit behavior or the record shape | [SKILL.md](skills/progress-tracker/SKILL.md) §Before creating anything + [MIGRATION.template.md](skills/progress-tracker/references/MIGRATION.template.md) + [KNOWN-ISSUE.md](KNOWN-ISSUE.md) KI-001 |
 | Changing eval scenarios or the trigger matrix | [evals/README.md](evals/README.md) |
+| Changing Codex plugin packaging or installation | [README.md](README.md) §Install + [docs/design-decisions.md](docs/design-decisions.md) Codex packaging decision |
 | Understanding why it's built this way | [docs/design-decisions.md](docs/design-decisions.md) |
 
 ## Commands

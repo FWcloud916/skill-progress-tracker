@@ -1,0 +1,37 @@
+{
+  "name": "progress-tracker",
+  "version": "1.7.0",
+  "description": "Track local development progress across single- or multi-scope task lifecycles.",
+  "author": {
+    "name": "FWcloud916",
+    "url": "https://github.com/FWcloud916"
+  },
+  "homepage": "https://github.com/FWcloud916/skill-progress-tracker",
+  "repository": "https://github.com/FWcloud916/skill-progress-tracker",
+  "keywords": [
+    "progress",
+    "tracking",
+    "worklog",
+    "development",
+    "lifecycle",
+    "productivity"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Progress Tracker",
+    "shortDescription": "Track development work across complete task lifecycles",
+    "longDescription": "Create, migrate, update, audit, and close local development progress items across one or more free-form scopes, with deterministic scripts and guarded lifecycle transitions.",
+    "developerName": "FWcloud916",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/FWcloud916/skill-progress-tracker",
+    "defaultPrompt": [
+      "Start tracking this development task",
+      "Audit the current progress tracker for drift",
+      "Close out this completed progress item"
+    ]
+  }
+}

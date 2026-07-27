@@ -9,6 +9,23 @@ seems arbitrary, check here before changing it.
 
 ---
 
+## 2026-07-27 — Package Codex directly from the repository root
+
+The repository root is the plugin root: `.codex-plugin/plugin.json` points to
+the existing `./skills/` directory, and `.agents/plugins/marketplace.json`
+points its local source to `./`. This matches the skills-only plugin layout
+used by the sibling `doc-architect` project and keeps
+`skills/progress-tracker/` as the single canonical source for Codex, Claude
+Code, `npx skills`, tests, and manual symlinks.
+
+Do not introduce a generated `plugins/progress-tracker/` payload or an
+in-repository skill symlink. Both add a second packaging representation with
+no runtime value here. The verification gate instead checks the root Codex
+manifest, marketplace source, canonical `SKILL.md`, and version equality with
+the Claude Code manifest directly.
+
+---
+
 ## 2026-07-24 — Add a separate lifecycle mutation and audit script
 
 `new_progress.py` remains a backward-compatible creation command. Update,

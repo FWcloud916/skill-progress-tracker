@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "progress-tracker",
   "displayName": "Progress Tracker",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Tracks local development progress across scopes with consented, script-gated migration (a whole-document inventory audit, not just an eyeballed active-work section), and safe lifecycle scripts — for any project.",
   "author": {
     "name": "FWcloud916",

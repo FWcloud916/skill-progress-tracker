@@ -40,7 +40,20 @@ several — for any project.
 
 ## Install
 
-### Option 1 — Claude Code plugin (recommended for Claude Code)
+### Option 1 — Codex plugin (recommended for Codex)
+
+The repo is a Codex plugin marketplace. Add it once, then install the plugin:
+
+```bash
+codex plugin marketplace add FWcloud916/skill-progress-tracker
+codex plugin add progress-tracker@progress-tracker
+```
+
+Start a new Codex conversation after installation so the bundled skill is
+loaded. Future published updates can be picked up by refreshing the Git
+marketplace and reinstalling the plugin.
+
+### Option 2 — Claude Code plugin (recommended for Claude Code)
 
 The repo is a Claude Code plugin marketplace; installing the plugin gives you
 the skill **and** the dedicated `progress-tracker` agent in one step, with
@@ -51,7 +64,7 @@ version-pinned updates:
 /plugin install progress-tracker@progress-tracker
 ```
 
-### Option 2 — skills CLI (any of 70+ agents)
+### Option 3 — skills CLI (any of 70+ agents)
 
 [vercel-labs/skills](https://github.com/vercel-labs/skills) installs the skill
 for the agent(s) you pick (Claude Code, Cursor, Codex, and more), creating any
@@ -63,9 +76,9 @@ npx skills add FWcloud916/skill-progress-tracker -g -a claude-code -y # non-inte
 ```
 
 This route installs the skill only. To also use the dedicated Claude Code
-agent, add the agent symlink from Option 3's last step.
+agent, add the agent symlink from Option 4's last step.
 
-### Option 3 — manual clone + symlink
+### Option 4 — manual clone + symlink
 
 Pick the layout your runtime reads — `~/.claude/skills` for Claude Code, or
 the universal `~/.agents/skills` for runtimes that share it. `mkdir -p` covers
@@ -88,12 +101,13 @@ ln -s "$(pwd)/skill-progress-tracker/agents/progress-tracker.md" ~/.claude/agent
 ```
 
 The agent definition preloads the skill via its `skills:` frontmatter, so the
-skill symlink is a prerequisite for the agent symlink.
+skill symlink is a prerequisite for the agent symlink. The Codex plugin and
+standalone-skill routes do not install this Claude Code-specific agent.
 
 ## Use
 
-**As a skill** — invoke `/progress-tracker` explicitly, or just ask in
-natural language:
+**As a skill** — invoke `$progress-tracker` in Codex, `/progress-tracker` in
+Claude Code, or just ask in natural language:
 
 - "start tracking this refactor" / "I need a progress note for this task" → create
 - "update the progress item for X" → update
@@ -147,10 +161,12 @@ python3 evals/scripts/run_scenarios.py                                          
 
 ```
 progress-tracker/
-├── .claude-plugin/   # plugin.json + marketplace.json — Claude Code plugin packaging
+├── .agents/plugins/  # marketplace.json — Codex marketplace catalog
+├── .claude-plugin/   # plugin.json + marketplace.json — Claude Code packaging
+├── .codex-plugin/    # plugin.json — Codex plugin packaging
 ├── skills/
 │   └── progress-tracker/
-│       ├── SKILL.md      # entry point: lifecycle, args, status enum
+│       ├── SKILL.md      # canonical entry point: lifecycle, args, status enum
 │       ├── agents/       # Codex UI metadata (openai.yaml)
 │       ├── references/   # workflow spec + item/index templates + seed READMEs
 │       └── scripts/      # create/update/check CLIs + their pytest suites
