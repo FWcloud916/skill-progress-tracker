@@ -4,16 +4,16 @@
     {
       "type": "write",
       "path": "PROGRESS.md",
-      "content": "# Site progress\n\n## Now\n\nNothing in progress\n\n## Next steps\n\n- Add sitemap.xml generation\n- Wire up structured data\n\n## SEO backlog\n\n- [ ] Audit meta descriptions\n- [x] Submit to Search Console\n\n## Done\n\n- Shipped the new landing page\n\n## Decision log\n\n- Chose Jekyll over Hugo\n"
-    },
-    {
-      "type": "run",
-      "args": ["seo-backlog", "--scope", "site"]
+      "content": "# Site progress\n\n## Now\n\nNothing in progress\n\n## Feature list\n\n| # | Behavior | State |\n|---|---|---|\n| 1 | Build every page | passing |\n\n## Next steps\n\nContext explaining why the work remains.\n\n- Add sitemap.xml generation\n- Wire up structured data\n\nTest constraint: update the matching assertion.\n\n## SEO backlog\n\n- [ ] Audit meta descriptions\n- [x] Submit to Search Console\n\n## Done\n\n- Shipped the new landing page\n\n## Decision log\n\n- Chose Jekyll over Hugo\n"
     },
     {
       "type": "run",
       "script": "update",
       "args": ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"]
+    },
+    {
+      "type": "run",
+      "args": ["seo-backlog", "--scope", "site"]
     },
     {
       "type": "run_expect_fail",
@@ -31,12 +31,15 @@
     "content_contains": [
       {"glob": "progress/_migrations/legacy-progress.md", "text": "Add sitemap.xml generation"},
       {"glob": "progress/_migrations/legacy-progress.md", "text": "Wire up structured data"},
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "#=1; Behavior=Build every page; State=passing"},
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "Context explaining why the work remains."},
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "Test constraint: update the matching assertion."},
       {"glob": "progress/_migrations/legacy-progress.md", "text": "Audit meta descriptions"},
       {"glob": "progress/_migrations/legacy-progress.md", "text": "Nothing in progress"},
       {"glob": "progress/_migrations/legacy-progress.md", "text": "| historical |"}
     ],
     "content_count": [
-      {"glob": "progress/_migrations/legacy-progress.md", "text": "| TBD | TBD |", "count": 3}
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "| TBD | TBD | TBD |", "count": 6}
     ]
   }
 }

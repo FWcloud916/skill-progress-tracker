@@ -82,17 +82,23 @@ empty actionable set:
 ```bash
 uv run <skill-dir>/scripts/update_progress.py migration-inventory <slug> --source <legacy-path>
 uv run <skill-dir>/scripts/update_progress.py migration-audit <slug>
+uv run <skill-dir>/scripts/update_progress.py migration-finalize <slug> --decision retain|delete
 ```
 
 `migration-inventory` scans the legacy source whole-document and writes a
-reconciliation record to `_migrations/<slug>.md`; `migration-audit` is the
-deletion gate — it fails while any entry lacks a disposition and destination.
-Invoke the installed `progress-tracker` skill for the full contract.
+reconciliation record to `_migrations/<slug>.md`. On first adoption it can
+scaffold this tracker before any destination item exists; `migration-audit` is the
+pre-deletion gate — it fails while any actionable/ambiguous entry lacks a
+valid `migrated` or `excluded` disposition and destination, any generated
+record field changed, migrated Evidence is absent/non-unique, or a required
+sign-off is incomplete. `migration-finalize` records the user's durable
+outcome and never deletes a source. Invoke the
+installed `progress-tracker` skill for the full contract.
 
 ## Cleanup policy
 
 Tools and AI agents **do not** delete item folders automatically. Cleanup
 (deleting folders, removing INDEX rows) is a **manual, human decision**, done
 as needed. A migrated legacy source may be deleted only after
-`migration-audit` exits 0; a `_migrations/<slug>.md` record should not be
-deleted while its legacy source still exists.
+`migration-audit` exits 0 and `migration-finalize --decision delete` seals
+the exact sources. Record completion afterward with `--confirm-deleted`.

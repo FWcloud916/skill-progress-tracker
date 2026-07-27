@@ -50,7 +50,9 @@ from pathlib import Path
 script = Path("skills/progress-tracker/scripts/update_progress.py").read_text(encoding="utf-8")
 template = Path("skills/progress-tracker/references/MIGRATION.template.md").read_text(encoding="utf-8")
 
-script_header = re.search(r'MIGRATION_TABLE_HEADER = "(.*)"', script).group(1)
+script_header = re.search(
+    r'MIGRATION_TABLE_HEADER = (?:\(\s*)?"(.*?)"(?:\s*\))?', script, re.DOTALL
+).group(1)
 template_header = next(
     line for line in template.splitlines() if line.startswith("| ID | Kind |")
 )
@@ -58,7 +60,7 @@ assert script_header == template_header, (
     f"MIGRATION_TABLE_HEADER mismatch: script={script_header!r} template={template_header!r}"
 )
 
-for name in ("SOURCES", "DISPOSITIONS", "TABLE", "SIGNOFF"):
+for name in ("SOURCES", "OUTCOME", "DISPOSITIONS", "TABLE", "SIGNOFF"):
     start = f"<!-- MIGRATION_{name}_START -->"
     end = f"<!-- MIGRATION_{name}_END -->"
     assert template.count(start) == 1 and template.count(end) == 1, f"marker pair {name}"
@@ -166,10 +168,13 @@ for path in paths:
     assert text.count(start) == 1 and text.count(end) == 1, f"migration gate markers in {path}"
     blocks.append(text[text.index(start) : text.index(end) + len(end)])
 assert all(block == blocks[0] for block in blocks[1:]), "migration gate blocks differ"
-assert "migration-inventory" in blocks[0] and "migration-audit" in blocks[0]
+assert all(command in blocks[0] for command in ("migration-inventory", "migration-audit"))
 
 script = Path("skills/progress-tracker/scripts/update_progress.py").read_text(encoding="utf-8")
-assert '"migration-inventory"' in script and '"migration-audit"' in script
+assert all(
+    f'"{command}"' in script
+    for command in ("migration-inventory", "migration-audit", "migration-finalize")
+)
 PY
 report "$mig_gate_ok" "migration gate command block matches exactly across docs" "migration gate block validation failed"
 

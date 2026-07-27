@@ -397,9 +397,43 @@ def legacy(project):
 
 
 def resolve_all_rows(record: Path, destination: str = "demo-task") -> None:
-    text = record.read_text(encoding="utf-8")
-    text = text.replace("| TBD | TBD |", f"| migrated | {destination} |")
-    record.write_text(text, encoding="utf-8")
+    tracker_dir = record.parents[1]
+    destination_files = [
+        path
+        for path in tracker_dir.glob("*/PROGRESS.md")
+        if f"**Slug:** {destination}" in path.read_text(encoding="utf-8")
+    ]
+    lines = record.read_text(encoding="utf-8").splitlines()
+    anchors: list[str] = []
+    for index, line in enumerate(lines):
+        if "| TBD | TBD | TBD |" not in line:
+            continue
+        entry_id = up.split_row(line)[0]
+        evidence = f"Migration evidence {len(anchors) + 1} for {entry_id}."
+        anchors.append(evidence)
+        lines[index] = line.replace(
+            "| TBD | TBD | TBD |",
+            f"| migrated | {destination} | {evidence} |",
+            1,
+        )
+    if destination_files:
+        destination_file = destination_files[0]
+        destination_text = destination_file.read_text(encoding="utf-8")
+        additions = [anchor for anchor in anchors if anchor not in destination_text]
+        if additions:
+            destination_file.write_text(
+                destination_text + "\n" + "\n".join(additions) + "\n",
+                encoding="utf-8",
+            )
+    record.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def migrated_evidence(record: Path) -> list[str]:
+    return [
+        up.unescape_table_text(up.split_row(line)[-1])
+        for line in record.read_text(encoding="utf-8").splitlines()
+        if line.startswith("|") and "| migrated |" in line
+    ]
 
 
 def tick_signoff(record: Path) -> None:
@@ -443,11 +477,18 @@ class TestMigrationScanner:
         assert entries[0].kind == "ambiguous"
         assert entries[0].kind in up.BLOCKING_KINDS
 
-    def test_known_historical_heading_emits_one_row(self):
+    def test_known_historical_heading_emits_every_entry(self):
         text = "## Decision log\n\n- Chose A\n- Chose B\n- Chose C\n- Chose D\n- Chose E\n"
         entries = up.scan_source(text, "src.md")
-        assert len(entries) == 1
-        assert entries[0].kind == "historical"
+        assert len(entries) == 5
+        assert all(entry.kind == "historical" for entry in entries)
+        assert [entry.text for entry in entries] == [
+            "Chose A",
+            "Chose B",
+            "Chose C",
+            "Chose D",
+            "Chose E",
+        ]
 
     def test_heading_matching_both_lists_resolves_actionable(self):
         text = "## Completed tasks\n\n- Ship the thing\n"
@@ -501,7 +542,51 @@ class TestMigrationScanner:
         text = "## Backlog\n\n| Task | Status |\n|---|---|\n| Fix X | open |\n| Fix Y | open |\n"
         entries = up.scan_source(text, "src.md")
         assert len(entries) == 2
-        assert {e.text for e in entries} == {"Fix X", "Fix Y"}
+        assert {e.text for e in entries} == {
+            "Task=Fix X; Status=open",
+            "Task=Fix Y; Status=open",
+        }
+
+    def test_table_row_retains_every_semantic_cell(self):
+        text = (
+            "## Feature list\n\n"
+            "| # | Behavior | Verify with | State |\n"
+            "|---|---|---|---|\n"
+            "| 1 | Build every page | `npm test` | passing |\n"
+        )
+        entries = up.scan_source(text, "src.md")
+        assert len(entries) == 1
+        assert entries[0].text == (
+            "#=1; Behavior=Build every page; Verify with=`npm test`; State=passing"
+        )
+
+    def test_mixed_prose_list_and_table_are_all_inventoried_in_source_order(self):
+        text = (
+            "## Next steps\n\n"
+            "Context explaining why the work remains.\n\n"
+            "- Implement the first task\n\n"
+            "| Task | State |\n|---|---|\n| Implement the second task | open |\n\n"
+            "Test constraint: update the matching assertion.\n"
+        )
+        entries = up.scan_source(text, "src.md")
+        assert [e.text for e in entries] == [
+            "Context explaining why the work remains.",
+            "Implement the first task",
+            "Task=Implement the second task; State=open",
+            "Test constraint: update the matching assertion.",
+        ]
+
+    def test_multiline_prose_is_one_complete_entry(self):
+        text = "## Backlog\n\nFirst line of context\ncontinues on the second line.\n"
+        entries = up.scan_source(text, "src.md")
+        assert [e.text for e in entries] == [
+            "First line of context continues on the second line."
+        ]
+
+    def test_punctuated_none_currently_open_is_empty(self):
+        entries = up.scan_source("## Blockers\n\nNone currently open.\n", "src.md")
+        assert len(entries) == 1
+        assert entries[0].kind == "empty"
 
     def test_preamble_is_ambiguous(self):
         text = "Some intro prose with no heading yet.\n\n## Done\n\n- shipped\n"
@@ -525,6 +610,40 @@ class TestMigrationScanner:
 
 
 class TestMigrationInventoryCommand:
+    def test_first_inventory_scaffolds_tracker_before_any_item_exists(self, tmp_path):
+        init_git_repo(tmp_path)
+        (tmp_path / "PROGRESS.md").write_text(LEGACY_SOURCE)
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            tmp_path,
+        )
+        assert result.returncode == 0, result.stderr
+        assert (tmp_path / "progress" / "README.md").is_file()
+        assert (tmp_path / "progress" / "INDEX.md").is_file()
+        assert (tmp_path / "progress" / "_template" / "PROGRESS.md").is_file()
+        assert (tmp_path / "progress" / "_plans" / "README.md").is_file()
+        assert (tmp_path / "progress" / "_migrations" / "legacy-progress.md").is_file()
+        assert not list((tmp_path / "progress").glob("*-demo-task"))
+
+    def test_first_inventory_dry_run_does_not_scaffold_tracker(self, tmp_path):
+        init_git_repo(tmp_path)
+        (tmp_path / "PROGRESS.md").write_text(LEGACY_SOURCE)
+        result = run_script(
+            UPDATE_SCRIPT,
+            [
+                "migration-inventory",
+                "legacy-progress",
+                "--source",
+                "PROGRESS.md",
+                "--dry-run",
+            ],
+            tmp_path,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "[dry-run] Would scaffold:" in result.stdout
+        assert not (tmp_path / "progress").exists()
+
     def test_creates_record_with_every_actionable_entry(self, legacy):
         result = run_script(
             UPDATE_SCRIPT,
@@ -534,7 +653,7 @@ class TestMigrationInventoryCommand:
         assert result.returncode == 0, result.stderr
         record = legacy / "progress" / "_migrations" / "legacy-progress.md"
         content = record.read_text()
-        assert content.count("| TBD | TBD |") == 3
+        assert content.count("| TBD | TBD | TBD |") == 3
         assert "Add sitemap.xml generation" in content
         assert "Wire up structured data" in content
         assert "Audit meta descriptions" in content
@@ -546,8 +665,20 @@ class TestMigrationInventoryCommand:
             legacy,
         )
         content = (legacy / "progress" / "_migrations" / "legacy-progress.md").read_text()
-        assert "| not-applicable | — |" in content  # `empty`/`done` rows
-        assert "| archived | — |" in content  # `historical` rows
+        assert "| not-applicable | — | — |" in content  # `empty`/`done` rows
+        assert "| archived |" not in content
+
+    def test_record_does_not_truncate_long_entries(self, legacy):
+        long_task = "A" * 240
+        (legacy / "PROGRESS.md").write_text(f"## Next steps\n\n- {long_task}\n")
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        content = (legacy / "progress" / "_migrations" / "legacy-progress.md").read_text()
+        assert long_task in content
+        assert f"{'A' * 159}…" not in content
 
     def test_refuses_source_outside_project_root(self, legacy, tmp_path):
         outside = tmp_path.parent / "outside.md"
@@ -619,8 +750,73 @@ class TestMigrationInventoryCommand:
         assert result.returncode == 0, result.stderr
         assert "Refresh:  7 preserved, 0 removed" in result.stdout
         content = record.read_text()
-        assert content.count("| migrated | demo-task |") == 3
-        assert "| TBD | TBD |" in content  # the newly added entry
+        assert content.count("| migrated | demo-task | Migration evidence ") == 3
+        assert "| TBD | TBD | TBD |" in content  # the newly added entry
+
+    def test_rerun_resets_signoffs_when_inventory_changes(self, legacy):
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        record = legacy / "progress" / "_migrations" / "legacy-progress.md"
+        tick_signoff(record)
+        (legacy / "PROGRESS.md").write_text(
+            LEGACY_SOURCE.replace(
+                "- Wire up structured data\n",
+                "- Wire up structured data\n- Add a robots.txt entry\n",
+            )
+        )
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "Sign-offs: reset — inventory changed" in result.stdout
+        content = record.read_text()
+        assert "- [x]" not in content
+        assert content.count("- [ ]") == len(SIGNOFF_LABELS)
+
+    def test_rerun_preserves_signoffs_only_when_inventory_is_identical(self, legacy):
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        record = legacy / "progress" / "_migrations" / "legacy-progress.md"
+        tick_signoff(record)
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "Sign-offs: preserved" in result.stdout
+        assert record.read_text().count("- [x]") == len(SIGNOFF_LABELS)
+
+    def test_rerun_drops_removed_disposition_and_resets_signoffs(self, legacy):
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        record = legacy / "progress" / "_migrations" / "legacy-progress.md"
+        text = record.read_text().replace(
+            "| not-applicable | — | — |", "| archived | — | — |", 1
+        )
+        record.write_text(text)
+        tick_signoff(record)
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "Sign-offs: reset — inventory changed" in result.stdout
+        content = record.read_text()
+        assert "| archived |" not in content
+        assert "- [x]" not in content
 
     def test_rerun_drops_vanished_rows(self, legacy):
         run_script(
@@ -662,6 +858,52 @@ class TestMigrationInventoryCommand:
         result = run_script(UPDATE_SCRIPT, ["check"], legacy)
         assert result.returncode == 0, result.stdout + result.stderr
 
+    def test_refresh_upgrades_v1_to_v2_preserves_choices_and_resets_signoffs(self, legacy):
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        record = legacy / "progress" / "_migrations" / "legacy-progress.md"
+        resolve_all_rows(record)
+        tick_signoff(record)
+        lines = record.read_text(encoding="utf-8").splitlines()
+        v1_lines: list[str] = []
+        in_outcome = False
+        in_entries = False
+        for line in lines:
+            if line == "**Schema version:** 2":
+                continue
+            if line == up.MIGRATION_OUTCOME_START:
+                in_outcome = True
+                continue
+            if in_outcome:
+                if line == up.MIGRATION_OUTCOME_END:
+                    in_outcome = False
+                continue
+            if line == up.MIGRATION_TABLE_START:
+                in_entries = True
+            elif line == up.MIGRATION_TABLE_END:
+                in_entries = False
+            if in_entries and line.startswith("|"):
+                cells = up.split_row(line)
+                if len(cells) == 9:
+                    line = "| " + " | ".join(cells[:8]) + " |"
+            v1_lines.append(line)
+        record.write_text("\n".join(v1_lines) + "\n", encoding="utf-8")
+
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "Schema:   1 → 2" in result.stdout
+        content = record.read_text(encoding="utf-8")
+        assert "**Schema version:** 2" in content
+        assert content.count("| migrated | demo-task | TBD |") == 3
+        assert "- [x]" not in content
+
 
 class TestMigrationAuditCommand:
     def _inventory(self, legacy: Path) -> Path:
@@ -695,7 +937,7 @@ class TestMigrationAuditCommand:
 
     def test_fails_when_migrated_row_has_no_destination(self, legacy):
         record = self._inventory(legacy)
-        text = record.read_text().replace("| TBD | TBD |", "| migrated | TBD |")
+        text = record.read_text().replace("| TBD | TBD | TBD |", "| migrated | TBD | TBD |")
         record.write_text(text)
         tick_signoff(record)
         result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
@@ -704,7 +946,7 @@ class TestMigrationAuditCommand:
 
     def test_fails_when_excluded_row_has_no_reason(self, legacy):
         record = self._inventory(legacy)
-        text = record.read_text().replace("| TBD | TBD |", "| excluded | — |")
+        text = record.read_text().replace("| TBD | TBD | TBD |", "| excluded | — | — |")
         record.write_text(text)
         tick_signoff(record)
         result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
@@ -719,6 +961,47 @@ class TestMigrationAuditCommand:
         assert result.returncode != 0
         assert "not an existing tracker item slug" in result.stdout
 
+    def test_fails_when_migrated_evidence_is_missing(self, legacy):
+        record = self._inventory(legacy)
+        resolve_all_rows(record)
+        evidence = migrated_evidence(record)[0]
+        record.write_text(record.read_text().replace(evidence, "TBD", 1))
+        tick_signoff(record)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "requires Evidence" in result.stdout
+
+    def test_fails_when_migrated_evidence_is_not_in_destination(self, legacy):
+        record = self._inventory(legacy)
+        resolve_all_rows(record)
+        evidence = migrated_evidence(record)[0]
+        record.write_text(record.read_text().replace(evidence, "Missing destination locator", 1))
+        tick_signoff(record)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "was not found" in result.stdout
+
+    def test_fails_when_migrated_evidence_is_not_unique(self, legacy):
+        record = self._inventory(legacy)
+        resolve_all_rows(record)
+        progress = item_file(legacy)
+        evidence = migrated_evidence(record)[0]
+        progress.write_text(progress.read_text() + f"\n{evidence}\n")
+        tick_signoff(record)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "is not unique" in result.stdout
+
+    def test_fails_when_two_rows_reuse_one_destination_locator(self, legacy):
+        record = self._inventory(legacy)
+        resolve_all_rows(record)
+        evidence = migrated_evidence(record)
+        record.write_text(record.read_text().replace(evidence[1], evidence[0], 1))
+        tick_signoff(record)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "each migrated row requires its own locator" in result.stdout
+
     def test_fails_when_kind_edited_by_hand(self, legacy):
         record = self._inventory(legacy)
         text = record.read_text().replace(
@@ -727,7 +1010,49 @@ class TestMigrationAuditCommand:
         record.write_text(text)
         result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
         assert result.returncode != 0
-        assert "Kind was hand-edited" in result.stdout
+        assert "generated field(s) were hand-edited: Kind" in result.stdout
+
+    @pytest.mark.parametrize(
+        ("old", "new", "field"),
+        [
+            (
+                "| actionable | `PROGRESS.md` | 9 |",
+                "| actionable | `OTHER.md` | 9 |",
+                "Source",
+            ),
+            ("Site progress > Next steps", "Site progress > Later", "Section"),
+            ("Add sitemap.xml generation", "Add robots.txt generation", "Entry"),
+        ],
+    )
+    def test_fails_when_generated_field_edited_by_hand(self, legacy, old, new, field):
+        record = self._inventory(legacy)
+        text = record.read_text()
+        assert old in text
+        record.write_text(text.replace(old, new, 1))
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert f"generated field(s) were hand-edited: {field}" in result.stdout
+
+    def test_fails_when_blocking_row_uses_not_applicable(self, legacy):
+        record = self._inventory(legacy)
+        text = record.read_text().replace(
+            "| TBD | TBD | TBD |", "| not-applicable | — | — |"
+        )
+        record.write_text(text)
+        tick_signoff(record)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "is not allowed for Kind 'actionable'" in result.stdout
+
+    def test_fails_when_removed_archived_disposition_is_used(self, legacy):
+        record = self._inventory(legacy)
+        text = record.read_text().replace(
+            "| not-applicable | — | — |", "| archived | — | — |", 1
+        )
+        record.write_text(text)
+        result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
+        assert result.returncode != 0
+        assert "unknown Disposition 'archived'" in result.stdout
 
     def test_fails_when_source_gains_a_new_entry(self, legacy):
         record = self._inventory(legacy)
@@ -775,7 +1100,8 @@ class TestMigrationAuditCommand:
         tick_signoff(record)
         result = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
         assert result.returncode == 0, result.stdout + result.stderr
-        assert "Deletion gate: OPEN" in result.stdout
+        assert "Pre-deletion gate: OPEN" in result.stdout
+        assert "user chose whether" not in record.read_text().lower()
 
     def test_prints_historical_disclosure_on_pass_and_fail(self, legacy):
         record = self._inventory(legacy)
@@ -785,6 +1111,7 @@ class TestMigrationAuditCommand:
         tick_signoff(record)
         passing = run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
         assert "Decision log" in passing.stdout
+        assert "Decision log: 1 entr(ies)" in passing.stdout
 
     def test_custom_tracker_dir(self, tmp_path):
         init_git_repo(tmp_path)
@@ -811,3 +1138,93 @@ class TestMigrationAuditCommand:
         before = record.read_text()
         run_script(UPDATE_SCRIPT, ["migration-audit", "legacy-progress"], legacy)
         assert record.read_text() == before
+
+
+class TestMigrationFinalizeCommand:
+    def _prepared_record(self, legacy: Path) -> Path:
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"],
+            legacy,
+        )
+        record = legacy / "progress" / "_migrations" / "legacy-progress.md"
+        resolve_all_rows(record)
+        tick_signoff(record)
+        return record
+
+    def test_records_retained_without_deleting_source(self, legacy):
+        record = self._prepared_record(legacy)
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-finalize", "legacy-progress", "--decision", "retain"],
+            legacy,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (legacy / "PROGRESS.md").is_file()
+        content = record.read_text(encoding="utf-8")
+        assert "**State:** retained" in content
+        assert f"**Decision date:** {date.today().isoformat()}" in content  # noqa: DTZ011
+        assert "The legacy source(s) remain retained" in result.stdout
+
+    def test_delete_approval_is_non_destructive(self, legacy):
+        record = self._prepared_record(legacy)
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-finalize", "legacy-progress", "--decision", "delete"],
+            legacy,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (legacy / "PROGRESS.md").is_file()
+        assert "**State:** delete-approved" in record.read_text(encoding="utf-8")
+        assert "No source files were deleted" in result.stdout
+
+    def test_refuses_confirmation_while_an_approved_source_exists(self, legacy):
+        self._prepared_record(legacy)
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-finalize", "legacy-progress", "--decision", "delete"],
+            legacy,
+        )
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-finalize", "legacy-progress", "--confirm-deleted"],
+            legacy,
+        )
+        assert result.returncode != 0
+        assert "still exist" in result.stderr
+
+    def test_confirms_deleted_only_after_source_is_absent(self, legacy):
+        record = self._prepared_record(legacy)
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-finalize", "legacy-progress", "--decision", "delete"],
+            legacy,
+        )
+        (legacy / "PROGRESS.md").unlink()
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-finalize", "legacy-progress", "--confirm-deleted"],
+            legacy,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        content = record.read_text(encoding="utf-8")
+        assert "**State:** deleted" in content
+        assert f"**Completion date:** {date.today().isoformat()}" in content  # noqa: DTZ011
+
+    def test_refuses_confirmation_if_record_changed_after_approval(self, legacy):
+        record = self._prepared_record(legacy)
+        run_script(
+            UPDATE_SCRIPT,
+            ["migration-finalize", "legacy-progress", "--decision", "delete"],
+            legacy,
+        )
+        evidence = migrated_evidence(record)[0]
+        record.write_text(record.read_text().replace(evidence, f"Different {evidence}", 1))
+        (legacy / "PROGRESS.md").unlink()
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["migration-finalize", "legacy-progress", "--confirm-deleted"],
+            legacy,
+        )
+        assert result.returncode != 0
+        assert "changed after deletion approval" in result.stderr

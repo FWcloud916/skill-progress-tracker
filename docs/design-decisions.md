@@ -2,7 +2,7 @@
 
 > **Type:** Reference
 > **Audience:** Maintainers, AI agents
-> **Last updated:** 2026-07-26
+> **Last updated:** 2026-07-27
 
 A decision log with rationale, in chronological order. When a design choice
 seems arbitrary, check here before changing it.
@@ -220,27 +220,34 @@ The fix is two new `update_progress.py` subcommands, not more emphatic prose:
 
 - `migration-inventory <slug> --source <path>` scans a legacy source
   **whole-document** and writes a reconciliation record to
-  `<tracker-dir>/_migrations/<slug>.md`. Every section is classified
+  `<tracker-dir>/_migrations/<slug>.md`. If this is first adoption, it
+  scaffolds the tracker support files without creating an item, preserving the
+  contract that inventory precedes destination creation. Every section is classified
   `actionable`, `historical`, or — for anything neither keyword list
   recognizes — `ambiguous`, which blocks exactly like `actionable`. This is
   the direct fix: a heading nobody thought to add to a keyword list defaults
   to blocking, not to being silently treated as already covered. An
   unchecked `- [ ]` or inline `TODO`/`TBD` marker is actionable regardless of
-  its section, including inside a `## Done` heading.
+  its section, including inside a `## Done` heading. Prose blocks, list items,
+  and complete table rows are emitted in source order; a section containing a
+  list no longer suppresses adjacent prose, and table rows retain every
+  header/value pair instead of only their first cell.
 - `migration-audit <slug>` rescans the source and reconciles it against the
-  record. It is the deletion gate: it fails while any `actionable`/`ambiguous`
-  entry lacks a Disposition and Destination, any row's Kind was hand-edited,
-  any `migrated` Destination isn't an existing tracker item slug, the source
-  changed since the inventory was taken, or a human sign-off box (semantic
-  equivalence, pointer audit, link audit, historical disclosure, retention
-  choice) is unticked.
+  record. It is the pre-deletion gate: it fails while any `actionable`/`ambiguous`
+  entry lacks a valid `migrated`/`excluded` Disposition and Destination, any
+  generated row field was hand-edited, any `migrated` Destination isn't an
+  existing tracker item slug, its Evidence does not occur uniquely in that
+  item, the source changed since the inventory was
+  taken, or a pre-deletion human sign-off box (semantic equivalence, pointer
+  audit, link audit, historical disclosure) is unticked. Refreshing a changed
+  source or generated inventory resets all global sign-offs; they survive only
+  an identical inventory.
 
-**Honest limit:** the audit proves the destination *item exists*; it cannot
-prove the migrated entry's content actually landed there, or that a pointer
-was updated correctly. Those remain human-attested via the record's sign-off
-checklist — the script makes **inventory completeness** (the actual root
-cause) mechanical, not the whole migration audit. Presenting this as full
-automation would be dishonest about what it verifies.
+Schema v2 strengthens destination verification: every `migrated` row carries
+a non-trivial Evidence locator copied from its destination item, and audit
+requires that locator to occur exactly once. Semantic equivalence and external
+pointer/link correctness remain human-attested because the script cannot infer
+intent from matching text alone.
 
 **Deliberately conservative `HISTORICAL_HEADINGS`:** every entry in that list
 is a suppression vector — a heading that should have blocked but silently
@@ -248,7 +255,31 @@ didn't is exactly what KI-001 was. `ACTIONABLE_HEADINGS` can be generous
 because a false positive there only adds a row someone has to disposition;
 `HISTORICAL_HEADINGS` stays narrow because a false positive there reproduces
 the incident. Anything on neither list falls through to `ambiguous`, which
-blocks — so an incomplete list is safe by construction, never silently lossy.
+  blocks — so an incomplete list is safe by construction, never silently lossy.
+
+The deletion decision remains after `migration-audit`, but it is no longer
+conversation-only. `migration-finalize` records `pending → retained` or
+`pending → delete-approved → deleted`. Delete approval reruns the audit and
+seals the exact source set plus a SHA-256 fingerprint of rows and sign-offs;
+the script never deletes sources. Confirmation requires every approved source
+to be absent, the seal to remain unchanged, and tracker consistency to pass.
+
+Entry-level `archived` was removed as well. Retaining a legacy source is one
+document-level user choice, not a row disposition. Blocking rows accept only
+`migrated` or reasoned `excluded`; non-blocking rows seed `not-applicable` and
+historical/reference sections are disclosed before the user makes the later
+document-level retention decision.
+
+## 2026-07-27 — Preserve full migration evidence and outcome (KI-002)
+
+A real-project retry showed that the KI-001 gate still compressed each
+historical section to its heading, accepted a destination slug without a
+per-entry locator, and left the final retain/delete answer only in chat.
+Schema v2 therefore inventories every historical entry, adds uniquely matching
+destination Evidence to each migrated row, and stores a durable non-destructive
+outcome state. Existing schema v1 records refresh to v2: compatible
+Disposition/Destination choices survive, migrated Evidence starts unresolved,
+and global sign-offs reset because the evidence basis changed.
 
 ## 2026-07-26 — Standardize on a single supported Python version (3.14)
 

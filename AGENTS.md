@@ -32,10 +32,14 @@ doubles as a Claude Code plugin (`.claude-plugin/`) and marketplace for it.
 - MUST keep the `<!-- MIGRATION_GATE_START/END -->` command-sequence block
   byte-identical across `SKILL.md`, `references/workflow.md`, and
   `agents/progress-tracker.md` (source: scripts/verify.sh)
-- MUST NOT let `migration-audit`'s deletion gate open on anything short of a
+- MUST NOT let `migration-audit`'s pre-deletion gate open on anything short of a
   clean reconciliation — an unrecognized source heading MUST default to
   blocking (`ambiguous`), never to being silently treated as already covered
   (source: KNOWN-ISSUE.md KI-001, docs/design-decisions.md)
+- MUST preserve every historical migration entry, require uniquely matching
+  Evidence for every `migrated` row, and persist retain/delete outcomes via
+  the non-destructive `migration-finalize` state machine
+  (source: KNOWN-ISSUE.md KI-002, docs/design-decisions.md)
 - MUST NOT reintroduce ticket normalization (`#`-prefixing digits, or any
   other tracker-specific reformatting) — tickets are kept verbatim by design
   (source: docs/design-decisions.md)

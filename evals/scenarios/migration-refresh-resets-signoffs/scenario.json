@@ -1,0 +1,53 @@
+{
+  "description": "Refreshing a changed source preserves dispositions for unchanged entries but resets all human sign-offs so stale attestations cannot validate a new inventory.",
+  "steps": [
+    {
+      "type": "write",
+      "path": "PROGRESS.md",
+      "content": "# Site progress\n\n## Next steps\n\n- Add sitemap.xml generation\n"
+    },
+    {
+      "type": "run",
+      "args": ["seo-backlog", "--scope", "site"]
+    },
+    {
+      "type": "run",
+      "script": "update",
+      "args": ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"]
+    },
+    {
+      "type": "edit",
+      "glob": "progress/_migrations/legacy-progress.md",
+      "find": "| TBD | TBD | TBD |",
+      "replace": "| migrated | seo-backlog | **Slug:** seo-backlog |"
+    },
+    {
+      "type": "edit",
+      "glob": "progress/_migrations/legacy-progress.md",
+      "find": "- [ ]",
+      "replace": "- [x]"
+    },
+    {
+      "type": "write",
+      "path": "PROGRESS.md",
+      "content": "# Site progress\n\n## Next steps\n\n- Add sitemap.xml generation\n- Add robots.txt generation\n"
+    },
+    {
+      "type": "run",
+      "script": "update",
+      "args": ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"]
+    }
+  ],
+  "checks": {
+    "content_contains": [
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "Add robots.txt generation"},
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "| migrated | seo-backlog | **Slug:** seo-backlog |"}
+    ],
+    "content_not_contains": [
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "- [x]"}
+    ],
+    "content_count": [
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "- [ ]", "count": 4}
+    ]
+  }
+}

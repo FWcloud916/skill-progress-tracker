@@ -1,0 +1,50 @@
+{
+  "description": "A passing schema-v2 migration records the user's retain decision durably while leaving the legacy source untouched.",
+  "steps": [
+    {
+      "type": "write",
+      "path": "PROGRESS.md",
+      "content": "# Legacy progress\n\n## Next steps\n\n- Add sitemap.xml generation\n"
+    },
+    {
+      "type": "run",
+      "args": ["seo-backlog", "--scope", "site"]
+    },
+    {
+      "type": "run",
+      "script": "update",
+      "args": ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"]
+    },
+    {
+      "type": "edit",
+      "glob": "progress/_migrations/legacy-progress.md",
+      "find": "| TBD | TBD | TBD |",
+      "replace": "| migrated | seo-backlog | **Slug:** seo-backlog |"
+    },
+    {
+      "type": "edit",
+      "glob": "progress/_migrations/legacy-progress.md",
+      "find": "- [ ]",
+      "replace": "- [x]"
+    },
+    {
+      "type": "run",
+      "script": "update",
+      "args": ["migration-finalize", "legacy-progress", "--decision", "retain"]
+    }
+  ],
+  "checks": {
+    "files_exist": [
+      "PROGRESS.md",
+      "progress/_migrations/legacy-progress.md"
+    ],
+    "content_contains": [
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "**Schema version:** 2"},
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "**State:** retained"},
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "**Confirmed sources:** [\"PROGRESS.md\"]"}
+    ],
+    "content_not_contains": [
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "**Approval fingerprint:** —"}
+    ]
+  }
+}

@@ -58,9 +58,10 @@ If a separate tracking mechanism exists:
 4. Copy every actionable entry the inventory lists into the new item(s):
    current status, scope, branches/tickets/plans, goals, unfinished tasks,
    current work log, blockers, next actions, and live references. For each
-   entry, fill in the record's Disposition (`migrated`, `excluded`,
-   `archived`, or `not-applicable`) and Destination, and verify semantic
-   equivalence against wherever it landed.
+   entry, fill in the record's Disposition (`migrated`, `excluded`, or
+   `not-applicable`) and Destination. Every `migrated` row also needs a
+   non-trivial, row-specific Evidence locator copied from the destination item; verify
+   semantic equivalence against wherever it landed.
 5. Update every live pointer to the old mechanism, including Markdown links,
    path mentions, agent instructions, command examples, scripts, and
    configuration.
@@ -68,7 +69,7 @@ If a separate tracking mechanism exists:
    or filename, and inspect all changed links. Classify any remaining match as
    an intentional historical/compatibility reference. Tick the record's human
    sign-off checklist only once each item has actually been verified.
-7. Run `migration-audit` — the deletion gate:
+7. Run `migration-audit` — the pre-deletion gate:
 
 <!-- MIGRATION_GATE_START -->
 Migration is script-gated. The deletion question MUST NOT be asked until both
@@ -80,35 +81,48 @@ uv run <skill-dir>/scripts/update_progress.py migration-audit <slug>
 ```
 
 `migration-audit` fails while any actionable or ambiguous source entry lacks a
-disposition and destination. An empty WIP section is not evidence of an empty
-actionable set.
+valid `migrated` or `excluded` disposition and destination, or any `migrated`
+row lacks Evidence that occurs exactly once in its destination item. Its human
+sign-offs cover work already performed. An empty WIP section is not evidence
+of an empty actionable set.
 <!-- MIGRATION_GATE_END -->
 
    Only after `migration-audit` exits 0, show its output and ask whether to
-   delete the original tracking artifacts. Do not infer consent. If deletion
-   is approved, remove only the confirmed legacy targets, update any
-   resulting pointers, then rerun `migration-audit`, `update_progress.py
-   check`, and the old-reference/link audits. If declined, retain the
-   originals as legacy records and keep live pointers on the new tracker.
+   delete the original tracking artifacts. Do not infer consent. Record a
+   declined deletion with `migration-finalize <slug> --decision retain`. If
+   deletion is approved, run `migration-finalize <slug> --decision delete`;
+   this reruns the audit, seals the exact sources and record fingerprint, and
+   **does not delete anything**. Remove only those approved sources, update
+   affected pointers, run pointer/link checks, then run
+   `migration-finalize <slug> --confirm-deleted`.
 
-Report the migration record's location, `migration-audit`'s pass/fail result,
-the historical/reference sections it disclosed, pointer files updated,
-intentional legacy references, and the user's source-retention choice.
+Report the migration record's location, schema and final outcome,
+`migration-audit`'s pass/fail result, the historical/reference entry counts it
+disclosed, pointer files updated, and intentional legacy references.
 
 **Migration command reference:**
 
 ```bash
 # Scan the legacy source(s) and write/refresh <tracker-dir>/_migrations/<slug>.md.
 # --source may repeat; a directory source is scanned recursively for *.md.
-# Re-running preserves every already-filled Disposition, Destination, and
-# ticked sign-off box whose entry is unchanged, and prints a refresh delta.
+# If no tracker exists yet, this command scaffolds its support files without
+# creating a progress item, so inventory still precedes destination creation.
+# Re-running upgrades v1 records to v2 and preserves every compatible
+# Disposition, Destination, and Evidence whose
+# entry is unchanged. Sign-offs survive only an identical source + inventory;
+# any inventory change resets all of them and prints that refresh result.
 uv run <skill-dir>/scripts/update_progress.py migration-inventory <slug> --source <legacy-path> [--source <legacy-path>...]
 
-# Rescan and reconcile against the record — the deletion gate. Exits non-zero
+# Rescan and reconcile against the record — the pre-deletion gate. Exits non-zero
 # while any actionable/ambiguous entry lacks a Disposition and Destination,
-# any Kind was hand-edited, any migrated Destination isn't an existing item
-# slug, or any human sign-off box is unticked.
+# any generated field was hand-edited, any migrated Destination isn't an existing item
+# slug, its Evidence is absent/non-unique, or any human sign-off box is unticked.
 uv run <skill-dir>/scripts/update_progress.py migration-audit <slug>
+
+# Persist the user's choice. The delete decision never removes files itself.
+uv run <skill-dir>/scripts/update_progress.py migration-finalize <slug> --decision retain
+uv run <skill-dir>/scripts/update_progress.py migration-finalize <slug> --decision delete
+uv run <skill-dir>/scripts/update_progress.py migration-finalize <slug> --confirm-deleted
 ```
 
 Every row in the generated record is one of five `Kind` values:
@@ -117,6 +131,13 @@ Every row in the generated record is one of five `Kind` values:
 heading becomes `ambiguous`, not `historical` — the scanner defaults to
 blocking on what it doesn't recognize, never to treating it as already
 covered.
+
+`actionable` and `ambiguous` rows accept only `migrated` or `excluded`.
+`done` and `historical` rows are seeded `not-applicable` but may instead be
+`migrated` or `excluded`; `empty` rows accept only `not-applicable`. Every
+historical entry is retained as its own non-blocking record row. Retaining the
+whole legacy source is a durable document-level outcome after the audit, not
+an entry-level `archived` disposition.
 
 ---
 
@@ -175,7 +196,8 @@ Use `--dry-run` first to preview what would be created.
 On first use in a project, the script scaffolds the tracker directory's
 supporting files (`README.md`, `INDEX.md`, `_template/PROGRESS.md`,
 `_plans/README.md`) from this skill's bundled references — nothing to set up
-by hand.
+by hand. An approved migration normally scaffolds those files earlier through
+`migration-inventory`, before the first destination item is created.
 
 ---
 
@@ -282,4 +304,6 @@ close-out.
 **Never delete current tracker items automatically.** Deleting current item
 folders or removing rows from `INDEX.md` is a manual human decision. A legacy
 source may be deleted only after migration audits pass and the user explicitly
-confirms the exact source target; rerun all audits afterward.
+confirms the exact source target. Record approval with `migration-finalize
+--decision delete`, remove only its confirmed sources, then record completion
+with `migration-finalize --confirm-deleted` after pointer/link checks.

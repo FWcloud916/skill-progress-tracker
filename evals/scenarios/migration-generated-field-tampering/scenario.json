@@ -1,0 +1,36 @@
+{
+  "description": "migration-audit rejects a hand-edited generated Entry field instead of trusting a row merely because its opaque ID and Kind still match.",
+  "steps": [
+    {
+      "type": "write",
+      "path": "PROGRESS.md",
+      "content": "# Site progress\n\n## Next steps\n\n- Add sitemap.xml generation\n"
+    },
+    {
+      "type": "run",
+      "args": ["seo-backlog", "--scope", "site"]
+    },
+    {
+      "type": "run",
+      "script": "update",
+      "args": ["migration-inventory", "legacy-progress", "--source", "PROGRESS.md"]
+    },
+    {
+      "type": "edit",
+      "glob": "progress/_migrations/legacy-progress.md",
+      "find": "Add sitemap.xml generation",
+      "replace": "Add robots.txt generation"
+    },
+    {
+      "type": "run_expect_fail",
+      "script": "update",
+      "args": ["migration-audit", "legacy-progress"],
+      "expect_stderr_contains": "migration-audit failed"
+    }
+  ],
+  "checks": {
+    "content_contains": [
+      {"glob": "progress/_migrations/legacy-progress.md", "text": "Add robots.txt generation"}
+    ]
+  }
+}

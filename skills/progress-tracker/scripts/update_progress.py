@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import hashlib
+import json
 import os
 import re
 import sys
@@ -33,6 +34,8 @@ from new_progress import (
     require_project_descendant,
     resolve_project_root,
     resolve_tracker_dir,
+    scaffold_tracker_dir,
+    validate_scaffold,
     validate_single_line,
     validate_slug,
 )
@@ -70,6 +73,8 @@ MIGRATIONS_DIRNAME = "_migrations"
 
 MIGRATION_SOURCES_START = "<!-- MIGRATION_SOURCES_START -->"
 MIGRATION_SOURCES_END = "<!-- MIGRATION_SOURCES_END -->"
+MIGRATION_OUTCOME_START = "<!-- MIGRATION_OUTCOME_START -->"
+MIGRATION_OUTCOME_END = "<!-- MIGRATION_OUTCOME_END -->"
 MIGRATION_DISPOSITIONS_START = "<!-- MIGRATION_DISPOSITIONS_START -->"
 MIGRATION_DISPOSITIONS_END = "<!-- MIGRATION_DISPOSITIONS_END -->"
 MIGRATION_TABLE_START = "<!-- MIGRATION_TABLE_START -->"
@@ -77,8 +82,12 @@ MIGRATION_TABLE_END = "<!-- MIGRATION_TABLE_END -->"
 MIGRATION_SIGNOFF_START = "<!-- MIGRATION_SIGNOFF_START -->"
 MIGRATION_SIGNOFF_END = "<!-- MIGRATION_SIGNOFF_END -->"
 
-MIGRATION_TABLE_HEADER = "| ID | Kind | Source | Loc | Section | Entry | Disposition | Destination |"
-MIGRATION_TABLE_SEPARATOR = "|---|---|---|---|---|---|---|---|"
+MIGRATION_TABLE_HEADER = (
+    "| ID | Kind | Source | Loc | Section | Entry | Disposition | Destination | Evidence |"
+)
+MIGRATION_TABLE_SEPARATOR = "|---|---|---|---|---|---|---|---|---|"
+MIGRATION_SCHEMA_VERSION = 2
+MIGRATION_OUTCOME_STATES = ("pending", "retained", "delete-approved", "deleted")
 
 # A row's Kind is generated, never hand-set; these are the only values
 # scan_source() ever produces.
@@ -89,9 +98,18 @@ ENTRY_KINDS = ("actionable", "ambiguous", "done", "empty", "historical")
 BLOCKING_KINDS = ("actionable", "ambiguous")
 
 # A row's Disposition is hand-filled by whoever resolves the migration.
-DISPOSITION_VALUES = ("migrated", "excluded", "archived", "not-applicable")
+DISPOSITION_VALUES = ("migrated", "excluded", "not-applicable")
 TBD_CELL = "TBD"
 EMPTY_DESTINATION_VALUES = {"", "TBD", "—", "-"}
+EMPTY_EVIDENCE_VALUES = EMPTY_DESTINATION_VALUES
+MIN_EVIDENCE_LENGTH = 8
+ALLOWED_DISPOSITIONS_BY_KIND = {
+    "actionable": {"migrated", "excluded"},
+    "ambiguous": {"migrated", "excluded"},
+    "done": {"migrated", "excluded", "not-applicable"},
+    "empty": {"not-applicable"},
+    "historical": {"migrated", "excluded", "not-applicable"},
+}
 
 # Headings that mean "there is unresolved work described under here" —
 # generous by design; a false positive here just adds a row to disposition,
@@ -164,6 +182,7 @@ EMPTY_MARKERS = frozenset(
         "nothing in progress",
         "nothing",
         "none",
+        "none currently open",
         "n/a",
         "na",
         "tbd",
@@ -182,7 +201,6 @@ HUMAN_SIGNOFF_ITEMS = (
     "Every migrated entry was checked for semantic equivalence against its destination",
     "The pointer audit passed: every live reference to the legacy source was updated",
     "The link audit passed: every changed relative link resolves",
-    "The user chose whether to retain or delete the legacy source",
 )
 
 # --- Markdown lexing for the legacy-source scanner ---
@@ -286,6 +304,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument("slug", help="Migration slug used by migration-inventory.")
     _location_args(audit)
+
+    finalize = commands.add_parser(
+        "migration-finalize",
+        help="Record a retain/delete decision without deleting any source file.",
+    )
+    finalize.add_argument("slug", help="Migration slug used by migration-inventory.")
+    action = finalize.add_mutually_exclusive_group(required=True)
+    action.add_argument(
+        "--decision",
+        choices=("retain", "delete"),
+        help="Record the user's retain decision or pre-deletion approval.",
+    )
+    action.add_argument(
+        "--confirm-deleted",
+        action="store_true",
+        help="Confirm that every previously approved source is now absent.",
+    )
+    _location_args(finalize)
     return parser
 
 
@@ -677,6 +713,11 @@ def normalize_key(text: str) -> str:
     return _normalize_text(text)
 
 
+def normalize_empty_marker(text: str) -> str:
+    """Normalize only surrounding punctuation for exact empty-state matches."""
+    return EDGE_JUNK_RE.sub("", normalize_key(text))
+
+
 def normalize_heading(title: str) -> str:
     t = LEADING_NUM_RE.sub("", title)
     t = _normalize_text(t)
@@ -706,6 +747,23 @@ def split_row(line: str) -> list[str]:
     so a naive split("|") would corrupt any cell containing a literal pipe.
     """
     return [c.strip() for c in CELL_SPLIT_RE.split(line.strip())[1:-1]]
+
+
+def unescape_table_text(value: str) -> str:
+    """Undo the backslash escaping used for editable Markdown table cells."""
+    result: list[str] = []
+    escaped = False
+    for char in value:
+        if escaped:
+            result.append(char)
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        else:
+            result.append(char)
+    if escaped:
+        result.append("\\")
+    return "".join(result)
 
 
 def _logical_lines(text: str) -> list[tuple[int, str]]:
@@ -808,55 +866,70 @@ class RawEntry:
     checked: bool
 
 
+def _table_entry_text(headers: list[str], cells: list[str]) -> str:
+    """Render a complete table data row as stable, human-readable text."""
+    parts: list[str] = []
+    for idx, cell in enumerate(cells):
+        value = cell.strip()
+        if not value:
+            continue
+        header = headers[idx].strip() if idx < len(headers) else ""
+        label = header or f"Column {idx + 1}"
+        parts.append(f"{label}={value}")
+    return "; ".join(parts)
+
+
 def _iter_raw_entries(body: list[tuple[int, str]]) -> list[RawEntry]:
-    """Extract list items, table data rows, and checkboxes from a section body.
+    """Extract prose blocks, list items, table rows, and checkboxes in source order.
 
     A checkbox is always its own entry regardless of nesting depth — the
     false-negative guard for a stray `- [ ]` left under a historical heading.
     A nested plain-text item folds into its top-level parent, mirroring the
     lazy-continuation semantics complete_tasks() already relies on elsewhere
-    in this script.
+    in this script. Table rows retain every cell with its header, and prose is
+    emitted even when the same section also contains a list or table.
     """
     n = len(body)
     entries: list[RawEntry] = []
-
-    table_lines: set[int] = set()
-    idx = 0
-    while idx < n - 1:
-        _, line = body[idx]
-        _, next_line = body[idx + 1]
-        if TABLE_ROW_RE.match(line) and TABLE_SEP_RE.match(next_line):
-            table_lines.add(idx)
-            table_lines.add(idx + 1)
-            j = idx + 2
-            while j < n and TABLE_ROW_RE.match(body[j][1]) and not TABLE_SEP_RE.match(body[j][1]):
-                lineno, row = body[j]
-                cells = split_row(row)
-                text = next((c.strip() for c in cells if c.strip()), "")
-                if text:
-                    entries.append(RawEntry(lineno, text, False, False))
-                table_lines.add(j)
-                j += 1
-            idx = j
-        else:
-            idx += 1
-
     pending_text: str | None = None
     pending_line = 0
+    pending_kind: str | None = None
     top_indent: int | None = None
 
     def flush() -> None:
-        nonlocal pending_text, top_indent
+        nonlocal pending_text, pending_kind, top_indent
         if pending_text is not None:
             entries.append(RawEntry(pending_line, pending_text.strip(), False, False))
         pending_text = None
+        pending_kind = None
         top_indent = None
 
-    for idx in range(n):
-        if idx in table_lines:
-            flush()
-            continue
+    idx = 0
+    while idx < n:
         lineno, line = body[idx]
+
+        if (
+            idx + 1 < n
+            and TABLE_ROW_RE.match(line)
+            and TABLE_SEP_RE.match(body[idx + 1][1])
+        ):
+            flush()
+            headers = split_row(line)
+            idx += 2
+            while idx < n and TABLE_ROW_RE.match(body[idx][1]):
+                row_lineno, row = body[idx]
+                if not TABLE_SEP_RE.match(row):
+                    text = _table_entry_text(headers, split_row(row))
+                    if text:
+                        entries.append(RawEntry(row_lineno, text, False, False))
+                idx += 1
+            continue
+
+        if not line.strip():
+            flush()
+            idx += 1
+            continue
+
         m = LIST_RE.match(line)
         if m:
             indent = len(m.group("indent").expandtabs())
@@ -867,22 +940,32 @@ def _iter_raw_entries(body: list[tuple[int, str]]) -> list[RawEntry]:
                 entries.append(
                     RawEntry(lineno, cb.group("body").strip(), True, cb.group("mark").lower() == "x")
                 )
+                idx += 1
                 continue
-            if top_indent is None or indent <= top_indent:
+            if pending_kind != "list" or top_indent is None or indent <= top_indent:
                 flush()
                 top_indent = indent
+                pending_kind = "list"
                 pending_text = item_body.strip()
                 pending_line = lineno
             elif pending_text is not None:
                 pending_text = f"{pending_text} {item_body.strip()}"
+            idx += 1
             continue
-        if not line.strip():
-            flush()
-            continue
-        if pending_text is not None and line[:1] in (" ", "\t"):
+
+        if pending_kind == "list" and line[:1] in (" ", "\t"):
             pending_text = f"{pending_text} {line.strip()}"
+            idx += 1
             continue
-        flush()
+
+        if pending_kind == "paragraph" and pending_text is not None:
+            pending_text = f"{pending_text} {line.strip()}"
+        else:
+            flush()
+            pending_kind = "paragraph"
+            pending_text = line.strip()
+            pending_line = lineno
+        idx += 1
 
     flush()
     return entries
@@ -898,7 +981,7 @@ def entry_kind(entry: RawEntry, section_classification: str) -> str:
     """
     if entry.is_checkbox:
         return "done" if entry.checked else "actionable"
-    if normalize_key(entry.text) in EMPTY_MARKERS:
+    if normalize_empty_marker(entry.text) in EMPTY_MARKERS:
         return "empty"
     if INLINE_ACTIONABLE_RE.search(entry.text):
         return "actionable"
@@ -961,26 +1044,10 @@ def scan_source(text: str, source_rel: str) -> list[SourceEntry]:
     for section in sections:
         raw_entries = _iter_raw_entries(section.body)
         if not raw_entries:
-            candidates = [(lineno, line.strip()) for lineno, line in section.body if line.strip()]
-            if not candidates:
-                continue
-            lineno, first_line = candidates[0]
-            raw_entries = [RawEntry(lineno, first_line, False, False)]
-
-        kinds = [entry_kind(e, section.classification) for e in raw_entries]
-
-        if section.classification == "historical":
-            # Compress to one disclosure row per historical section; an entry
-            # overridden to actionable/done by its own signal (a stray
-            # checkbox, an inline TODO) stays individually visible.
-            overridden = [(e, k) for e, k in zip(raw_entries, kinds) if k != "historical"]
-            first_lineno = section.body[0][0] if section.body else 0
-            entries.append(make_entry("historical", section.title, first_lineno, section.path))
-            for e, k in overridden:
-                entries.append(make_entry(k, e.text, e.line, section.path))
             continue
 
-        for e, k in zip(raw_entries, kinds):
+        for e in raw_entries:
+            k = entry_kind(e, section.classification)
             entries.append(make_entry(k, e.text, e.line, section.path))
 
     return entries
@@ -1055,31 +1122,31 @@ def seed_migrations_readme(migrations_dir: Path) -> None:
     )
 
 
-def render_entry_rows(entries: list[SourceEntry], preserved: dict[str, tuple[str, str]]) -> str:
+def render_entry_rows(
+    entries: list[SourceEntry], preserved: dict[str, tuple[str, str, str]]
+) -> str:
     lines: list[str] = []
     for e in entries:
-        disposition, destination = preserved.get(e.entry_id, _seed_cells(e.kind))
-        entry_text = e.text if len(e.text) <= 160 else f"{e.text[:159]}…"
+        disposition, destination, evidence = preserved.get(e.entry_id, _seed_cells(e.kind))
         cells = [
             e.entry_id,
             e.kind,
             markdown_code(e.source, table_cell=True),
             str(e.line) if e.line else "—",
             markdown_table_text(e.section),
-            markdown_table_text(entry_text),
+            markdown_table_text(e.text),
             disposition,
             markdown_table_text(destination),
+            markdown_table_text(evidence),
         ]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)
 
 
-def _seed_cells(kind: str) -> tuple[str, str]:
+def _seed_cells(kind: str) -> tuple[str, str, str]:
     if kind in BLOCKING_KINDS:
-        return TBD_CELL, TBD_CELL
-    if kind == "historical":
-        return "archived", "—"
-    return "not-applicable", "—"  # done, empty
+        return TBD_CELL, TBD_CELL, TBD_CELL
+    return "not-applicable", "—", "—"  # done, empty, historical
 
 
 def render_migration_record(
@@ -1088,7 +1155,7 @@ def render_migration_record(
     updated: str,
     digests: dict[str, str | None],
     entries: list[SourceEntry],
-    preserved: dict[str, tuple[str, str]],
+    preserved: dict[str, tuple[str, str, str]],
 ) -> str:
     template = (REFERENCES_DIR / "MIGRATION.template.md").read_text(encoding="utf-8")
     source_rows = "\n".join(
@@ -1115,13 +1182,25 @@ class RecordRow:
     text: str
     disposition: str
     destination: str
+    evidence: str
+
+
+@dataclass
+class MigrationOutcome:
+    state: str
+    decision_date: str
+    completion_date: str
+    confirmed_sources: str
+    approval_fingerprint: str
 
 
 @dataclass
 class MigrationRecord:
+    schema_version: int
     sources: dict[str, str]
     rows: dict[str, RecordRow]
     signoff: dict[str, bool]
+    outcome: MigrationOutcome
 
 
 def _extract_block(text: str, start: str, end: str, path: Path) -> str:
@@ -1131,9 +1210,43 @@ def _extract_block(text: str, start: str, end: str, path: Path) -> str:
 
 
 def parse_migration_record(text: str, path: Path) -> MigrationRecord:
+    schema_match = re.search(r"^\*\*Schema version:\*\* (\d+)\s*$", text, re.MULTILINE)
+    schema_version = int(schema_match.group(1)) if schema_match else 1
+    if schema_version not in (1, MIGRATION_SCHEMA_VERSION):
+        sys.exit(f"ERROR: unsupported migration schema version {schema_version} in {path}")
+
     sources_block = _extract_block(text, MIGRATION_SOURCES_START, MIGRATION_SOURCES_END, path)
     table_block = _extract_block(text, MIGRATION_TABLE_START, MIGRATION_TABLE_END, path)
     signoff_block = _extract_block(text, MIGRATION_SIGNOFF_START, MIGRATION_SIGNOFF_END, path)
+    if schema_version == 1:
+        outcome = MigrationOutcome("pending", "—", "—", "—", "—")
+    else:
+        outcome_block = _extract_block(
+            text, MIGRATION_OUTCOME_START, MIGRATION_OUTCOME_END, path
+        )
+        outcome_values: dict[str, str] = {}
+        for label in (
+            "State",
+            "Decision date",
+            "Completion date",
+            "Confirmed sources",
+            "Approval fingerprint",
+        ):
+            match = re.search(rf"^\*\*{re.escape(label)}:\*\* (.+)$", outcome_block, re.MULTILINE)
+            if not match:
+                sys.exit(f"ERROR: migration outcome field {label!r} missing from {path}")
+            outcome_values[label] = match.group(1).strip()
+        if outcome_values["State"] not in MIGRATION_OUTCOME_STATES:
+            sys.exit(
+                f"ERROR: unknown migration outcome state {outcome_values['State']!r} in {path}"
+            )
+        outcome = MigrationOutcome(
+            state=outcome_values["State"],
+            decision_date=outcome_values["Decision date"],
+            completion_date=outcome_values["Completion date"],
+            confirmed_sources=outcome_values["Confirmed sources"],
+            approval_fingerprint=outcome_values["Approval fingerprint"],
+        )
 
     sources: dict[str, str] = {}
     for line in sources_block.splitlines():
@@ -1151,9 +1264,23 @@ def parse_migration_record(text: str, path: Path) -> MigrationRecord:
         if not stripped.startswith("|") or stripped.startswith(("|---", "| ID |")):
             continue
         cells = split_row(stripped)
-        if len(cells) != 8:
+        if len(cells) not in (8, 9):
             sys.exit(f"ERROR: malformed entry row in {path}: {stripped!r}")
-        entry_id, kind, source, loc, section, entry_text, disposition, destination = cells
+        if len(cells) == 8:
+            entry_id, kind, source, loc, section, entry_text, disposition, destination = cells
+            evidence = TBD_CELL if disposition == "migrated" else "—"
+        else:
+            (
+                entry_id,
+                kind,
+                source,
+                loc,
+                section,
+                entry_text,
+                disposition,
+                destination,
+                evidence,
+            ) = cells
         if entry_id in rows:
             sys.exit(f"ERROR: duplicate record row for {entry_id} in {path}")
         rows[entry_id] = RecordRow(
@@ -1165,6 +1292,7 @@ def parse_migration_record(text: str, path: Path) -> MigrationRecord:
             text=entry_text,
             disposition=disposition,
             destination=destination,
+            evidence=evidence,
         )
 
     signoff: dict[str, bool] = {}
@@ -1173,7 +1301,13 @@ def parse_migration_record(text: str, path: Path) -> MigrationRecord:
         if m:
             signoff[m.group("label").strip()] = m.group("mark").lower() == "x"
 
-    return MigrationRecord(sources=sources, rows=rows, signoff=signoff)
+    return MigrationRecord(
+        schema_version=schema_version,
+        sources=sources,
+        rows=rows,
+        signoff=signoff,
+        outcome=outcome,
+    )
 
 
 def existing_item_slugs(tracker_dir: Path, project_root: Path) -> dict[str, Path]:
@@ -1188,13 +1322,41 @@ def existing_item_slugs(tracker_dir: Path, project_root: Path) -> dict[str, Path
     return slugs
 
 
+def normalize_evidence(value: str) -> str:
+    return re.sub(r"\s+", " ", unescape_table_text(value).strip())
+
+
+def migration_approval_fingerprint(record: MigrationRecord) -> str:
+    """Seal the audited migration basis before a source-removal decision."""
+    payload = {
+        "schema": record.schema_version,
+        "sources": sorted(record.sources.items()),
+        "rows": [
+            [
+                row.entry_id,
+                row.kind,
+                row.source,
+                row.section,
+                row.text,
+                row.disposition,
+                row.destination,
+                row.evidence,
+            ]
+            for row in sorted(record.rows.values(), key=lambda item: item.entry_id)
+        ],
+        "signoff": sorted(record.signoff.items()),
+    }
+    canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def reconcile(
     record: MigrationRecord,
     scanned: list[SourceEntry],
     digests: dict[str, str | None],
     tracker_dir: Path,
     project_root: Path,
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[SourceEntry]]:
     """Reconcile a migration record against a fresh scan. Returns
     (failures, historical-disclosure lines). Any failure keeps the deletion
     gate closed.
@@ -1225,41 +1387,60 @@ def reconcile(
         if entry_id not in scanned_by_id:
             failures.append(f"record row {entry_id} matches no source entry: '{row.text}'")
 
-    historical: list[str] = []
+    historical: list[SourceEntry] = []
     item_slugs = existing_item_slugs(tracker_dir, project_root)
+    evidence_owners: dict[tuple[str, str], str] = {}
 
     for entry_id, row in record.rows.items():
         entry = scanned_by_id.get(entry_id)
         if entry is None:
             continue  # already reported above
 
-        if row.kind != entry.kind:
+        generated_fields = {
+            "Kind": (row.kind, entry.kind),
+            "Source": (
+                row.source,
+                markdown_code(entry.source, table_cell=True).strip("`"),
+            ),
+            "Section": (row.section, markdown_table_text(entry.section)),
+            "Entry": (row.text, markdown_table_text(entry.text)),
+        }
+        edited_fields = [
+            f"{name} (record={actual!r}, source={expected!r})"
+            for name, (actual, expected) in generated_fields.items()
+            if actual != expected
+        ]
+        if edited_fields:
             failures.append(
-                f"record row {entry_id}: Kind was hand-edited "
-                f"(record={row.kind!r}, source={entry.kind!r})"
+                f"record row {entry_id}: generated field(s) were hand-edited: "
+                + "; ".join(edited_fields)
             )
             continue
 
-        if row.kind == "historical":
-            historical.append(f"{entry.source}:{entry.line}  {entry.section}")
+        if entry.kind == "historical":
+            historical.append(entry)
 
         disposition = row.disposition.strip()
         destination = row.destination.strip()
+        evidence = row.evidence.strip()
 
-        if row.kind in BLOCKING_KINDS and disposition in ("", TBD_CELL):
+        if disposition in ("", TBD_CELL):
             failures.append(
                 f"record row {entry_id} ({row.kind}) is unresolved: "
                 f"{entry.source}:{entry.line} '{entry.text}' — set a Disposition and Destination"
             )
             continue
 
-        if disposition in ("", TBD_CELL):
-            continue  # non-blocking row left at its seeded default
-
         if disposition not in DISPOSITION_VALUES:
             failures.append(
                 f"record row {entry_id}: unknown Disposition {disposition!r}; "
                 f"expected one of {', '.join(DISPOSITION_VALUES)}"
+            )
+        elif disposition not in ALLOWED_DISPOSITIONS_BY_KIND[entry.kind]:
+            allowed = ", ".join(sorted(ALLOWED_DISPOSITIONS_BY_KIND[entry.kind]))
+            failures.append(
+                f"record row {entry_id}: Disposition {disposition!r} is not allowed "
+                f"for Kind {entry.kind!r}; expected one of {allowed}"
             )
         elif disposition == "migrated":
             if destination in EMPTY_DESTINATION_VALUES:
@@ -1270,9 +1451,53 @@ def reconcile(
                 failures.append(
                     f"record row {entry_id}: destination {destination!r} is not an existing tracker item slug"
                 )
+            else:
+                locator = normalize_evidence(evidence)
+                if evidence in EMPTY_EVIDENCE_VALUES or len(locator) < MIN_EVIDENCE_LENGTH:
+                    failures.append(
+                        f"record row {entry_id}: Disposition 'migrated' requires Evidence "
+                        f"of at least {MIN_EVIDENCE_LENGTH} characters"
+                    )
+                else:
+                    destination_text = re.sub(
+                        r"\s+", " ", item_slugs[destination].read_text(encoding="utf-8")
+                    )
+                    count = destination_text.count(locator)
+                    if count == 0:
+                        failures.append(
+                            f"record row {entry_id}: Evidence {locator!r} was not found in "
+                            f"destination {destination!r}"
+                        )
+                    elif count > 1:
+                        failures.append(
+                            f"record row {entry_id}: Evidence {locator!r} is not unique in "
+                            f"destination {destination!r} ({count} matches)"
+                        )
+                    else:
+                        evidence_key = (destination, locator)
+                        owner = evidence_owners.get(evidence_key)
+                        if owner:
+                            failures.append(
+                                f"record rows {owner} and {entry_id}: Evidence {locator!r} "
+                                f"is reused for destination {destination!r}; each migrated "
+                                "row requires its own locator"
+                            )
+                        else:
+                            evidence_owners[evidence_key] = entry_id
         elif disposition == "excluded" and destination in EMPTY_DESTINATION_VALUES:
             failures.append(
                 f"record row {entry_id}: Disposition 'excluded' requires a reason in Destination"
+            )
+        elif disposition == "not-applicable" and destination not in EMPTY_DESTINATION_VALUES:
+            failures.append(
+                f"record row {entry_id}: Disposition 'not-applicable' must use an empty "
+                "Destination such as '—'"
+            )
+
+        if disposition != "migrated" and evidence not in EMPTY_EVIDENCE_VALUES:
+            failures.append(
+                f"record row {entry_id}: Disposition {disposition!r} must use empty Evidence "
+                "such as '—'"
             )
 
     for label in HUMAN_SIGNOFF_ITEMS:
@@ -1287,9 +1512,74 @@ def reconcile(
     return failures, historical
 
 
+def print_historical_summary(historical: list[SourceEntry]) -> None:
+    grouped: dict[tuple[str, str], int] = {}
+    for entry in historical:
+        key = (entry.source, entry.section)
+        grouped[key] = grouped.get(key, 0) + 1
+    if not grouped:
+        print("Historical / reference sections in the source: none")
+        return
+    print("Historical / reference entries in the source (lost if the source is deleted):")
+    for (source, section), count in sorted(grouped.items()):
+        print(f"  {source} > {section}: {count} entr(ies)")
+
+
+def migration_audit_result(
+    record: MigrationRecord,
+    project_root: Path,
+    tracker_dir: Path,
+) -> tuple[list[str], list[SourceEntry]]:
+    scanned, digests = scan_relative_sources(sorted(record.sources), project_root)
+    return reconcile(record, scanned, digests, tracker_dir, project_root)
+
+
+def outcome_sources(record: MigrationRecord) -> str:
+    return json.dumps(sorted(record.sources), ensure_ascii=False)
+
+
+def replace_migration_outcome(
+    text: str,
+    record: MigrationRecord,
+    *,
+    state: str,
+    decision_date: str,
+    completion_date: str,
+    fingerprint: str,
+) -> str:
+    if record.schema_version != MIGRATION_SCHEMA_VERSION:
+        sys.exit("ERROR: refresh the migration inventory to schema v2 before finalizing")
+    replacement = "\n".join(
+        [
+            MIGRATION_OUTCOME_START,
+            f"**State:** {state}",
+            f"**Decision date:** {decision_date}",
+            f"**Completion date:** {completion_date}",
+            f"**Confirmed sources:** {outcome_sources(record)}",
+            f"**Approval fingerprint:** {fingerprint}",
+            MIGRATION_OUTCOME_END,
+        ]
+    )
+    start = text.index(MIGRATION_OUTCOME_START)
+    end = text.index(MIGRATION_OUTCOME_END, start) + len(MIGRATION_OUTCOME_END)
+    updated = text[:start] + replacement + text[end:]
+    return re.sub(
+        r"^\*\*Updated:\*\* [^\n]+$",
+        f"**Updated:** {date.today().isoformat()}",  # noqa: DTZ011
+        updated,
+        count=1,
+        flags=re.MULTILINE,
+    )
+
+
 def run_migration_inventory(args: argparse.Namespace) -> int:
     validate_slug(args.slug)
-    project_root, tracker_dir, _ = resolve_location(args.root, args.dir)
+    project_root = resolve_project_root(args.root)
+    dirname = args.dir or os.environ.get("PROGRESS_TRACKER_DIR") or DEFAULT_TRACKER_DIRNAME
+    validate_single_line(dirname, "--dir")
+    tracker_dir, _ = resolve_tracker_dir(project_root, dirname)
+    if tracker_dir.exists() and not tracker_dir.is_dir():
+        sys.exit(f"ERROR: tracker path exists but is not a directory: {tracker_dir}")
     source_rels = resolve_sources(args.source, project_root, tracker_dir)
     entries, digests = scan_relative_sources(source_rels, project_root)
     unreadable = [rel for rel, digest in digests.items() if digest is None]
@@ -1302,24 +1592,62 @@ def run_migration_inventory(args: argparse.Namespace) -> int:
         )
 
     record_path = migration_record_path(tracker_dir, args.slug, project_root)
+    validate_scaffold(tracker_dir, project_root)
     before = record_path.read_text(encoding="utf-8") if record_path.is_file() else ""
-    preserved: dict[str, tuple[str, str]] = {}
+    preserved: dict[str, tuple[str, str, str]] = {}
     dropped = 0
     created = date.today().isoformat()  # noqa: DTZ011
     prior_signoff: dict[str, bool] = {}
+    signoffs_preserved = False
     if before:
         prior = parse_migration_record(before, record_path)
+        if prior.outcome.state != "pending":
+            sys.exit(
+                f"ERROR: migration record is finalized as {prior.outcome.state!r}; "
+                "start a new migration slug instead of refreshing it"
+            )
         created_match = CREATED_LINE_RE.search(before)
         if created_match:
             created = created_match.group(1).strip()
+        entries_by_id = {entry.entry_id: entry for entry in entries}
         scanned_ids = {e.entry_id for e in entries}
         preserved = {
-            entry_id: (row.disposition, row.destination)
+            entry_id: (row.disposition, row.destination, row.evidence)
             for entry_id, row in prior.rows.items()
-            if entry_id in scanned_ids and row.disposition not in ("", TBD_CELL)
+            if entry_id in scanned_ids
+            and row.disposition not in ("", TBD_CELL)
+            and row.disposition in ALLOWED_DISPOSITIONS_BY_KIND[entries_by_id[entry_id].kind]
         }
         dropped = len(set(prior.rows) - scanned_ids)
-        prior_signoff = prior.signoff
+        current_generated = {
+            entry.entry_id: (
+                entry.kind,
+                markdown_code(entry.source, table_cell=True).strip("`"),
+                markdown_table_text(entry.section),
+                markdown_table_text(entry.text),
+            )
+            for entry in entries
+        }
+        prior_generated = {
+            entry_id: (row.kind, row.source, row.section, row.text)
+            for entry_id, row in prior.rows.items()
+        }
+        rendered_dispositions = {
+            entry.entry_id: preserved.get(entry.entry_id, _seed_cells(entry.kind))
+            for entry in entries
+        }
+        prior_dispositions = {
+            entry_id: (row.disposition, row.destination, row.evidence)
+            for entry_id, row in prior.rows.items()
+        }
+        signoffs_preserved = (
+            prior.schema_version == MIGRATION_SCHEMA_VERSION
+            and prior.sources == digests
+            and prior_generated == current_generated
+            and prior_dispositions == rendered_dispositions
+        )
+        if signoffs_preserved:
+            prior_signoff = prior.signoff
 
     today = date.today().isoformat()  # noqa: DTZ011
     after = render_migration_record(args.slug, created, today, digests, entries, preserved)
@@ -1328,10 +1656,12 @@ def run_migration_inventory(args: argparse.Namespace) -> int:
             after = after.replace(f"- [ ] {label}", f"- [x] {label}", 1)
 
     if args.dry_run:
+        scaffold_tracker_dir(tracker_dir, dry_run=True)
         print_diff(record_path, before, after)
         print("[dry-run] No files written.")
         return 0
 
+    scaffold_tracker_dir(tracker_dir, dry_run=False)
     record_path.parent.mkdir(parents=True, exist_ok=True)
     seed_migrations_readme(record_path.parent)
     record_path.write_text(after, encoding="utf-8")
@@ -1341,10 +1671,13 @@ def run_migration_inventory(args: argparse.Namespace) -> int:
     print(f"Entries:  {len(entries)} total, {len(blocking)} needing a disposition")
     if before:
         print(f"Refresh:  {len(preserved)} preserved, {dropped} removed")
+        if prior.schema_version != MIGRATION_SCHEMA_VERSION:
+            print(f"Schema:   {prior.schema_version} → {MIGRATION_SCHEMA_VERSION}")
+        print(f"Sign-offs: {'preserved' if signoffs_preserved else 'reset — inventory changed'}")
     for entry in blocking:
         print(f"  TBD  {entry.source}:{entry.line}  [{entry.section}]  {entry.text[:70]}")
     print()
-    print("Next: fill in Disposition and Destination for every TBD row, tick the")
+    print("Next: fill in Disposition, Destination, and Evidence for every TBD row, tick the")
     print(f"      human sign-off boxes, then run: migration-audit {args.slug}")
     return 0
 
@@ -1359,15 +1692,13 @@ def run_migration_audit(args: argparse.Namespace) -> int:
             f"Run: update_progress.py migration-inventory {args.slug} --source <legacy-path>"
         )
     record = parse_migration_record(record_path.read_text(encoding="utf-8"), record_path)
-    scanned, digests = scan_relative_sources(sorted(record.sources), project_root)
-    failures, historical = reconcile(record, scanned, digests, tracker_dir, project_root)
-
-    if historical:
-        print("Historical / reference sections in the source (lost if the source is deleted):")
-        for line in historical:
-            print(f"  {line}")
-    else:
-        print("Historical / reference sections in the source: none")
+    if record.outcome.state in ("retained", "deleted"):
+        sys.exit(
+            f"ERROR: migration is already finalized as {record.outcome.state!r}; "
+            "the pre-deletion audit is closed"
+        )
+    failures, historical = migration_audit_result(record, project_root, tracker_dir)
+    print_historical_summary(historical)
 
     if failures:
         for failure in failures:
@@ -1379,9 +1710,100 @@ def run_migration_audit(args: argparse.Namespace) -> int:
     blocking = sum(1 for row in record.rows.values() if row.kind in BLOCKING_KINDS)
     print(
         f"PASS  migration inventory reconciled: {blocking} actionable/ambiguous "
-        f"entr(ies) resolved, {len(historical)} historical section(s) disclosed"
+        f"entr(ies) resolved, {len(historical)} historical entr(ies) disclosed"
     )
-    print("Deletion gate: OPEN — ask the user before deleting the legacy source.")
+    if record.outcome.state == "delete-approved":
+        print("Deletion gate: APPROVED — remove only the confirmed source(s), then confirm deletion.")
+    else:
+        print("Pre-deletion gate: OPEN — record the user's decision with migration-finalize.")
+    return 0
+
+
+def run_migration_finalize(args: argparse.Namespace) -> int:
+    validate_slug(args.slug)
+    project_root, tracker_dir, _ = resolve_location(args.root, args.dir)
+    record_path = migration_record_path(tracker_dir, args.slug, project_root)
+    if not record_path.is_file():
+        sys.exit(f"ERROR: migration record not found: {record_path}")
+    before = record_path.read_text(encoding="utf-8")
+    record = parse_migration_record(before, record_path)
+    today = date.today().isoformat()  # noqa: DTZ011
+
+    if args.confirm_deleted:
+        if record.outcome.state != "delete-approved":
+            sys.exit("ERROR: --confirm-deleted requires the 'delete-approved' state")
+        expected_sources = outcome_sources(record)
+        if record.outcome.confirmed_sources != expected_sources:
+            sys.exit("ERROR: confirmed source set changed after deletion approval")
+        expected_fingerprint = migration_approval_fingerprint(record)
+        if record.outcome.approval_fingerprint != expected_fingerprint:
+            sys.exit("ERROR: migration record changed after deletion approval; do not confirm deletion")
+        present = [rel for rel in sorted(record.sources) if (project_root / rel).exists()]
+        if present:
+            sys.exit(
+                "ERROR: approved source(s) still exist; deletion cannot be confirmed:\n  "
+                + "\n  ".join(present)
+            )
+        tracker_failures = audit_tracker(tracker_dir, project_root)
+        if tracker_failures:
+            sys.exit(
+                "ERROR: tracker audit failed after source deletion:\n  "
+                + "\n  ".join(tracker_failures)
+            )
+        state = "deleted"
+        decision_date = record.outcome.decision_date
+        completion_date = today
+        fingerprint = record.outcome.approval_fingerprint
+    else:
+        if record.schema_version != MIGRATION_SCHEMA_VERSION:
+            sys.exit("ERROR: refresh the migration inventory to schema v2 before finalizing")
+        if args.decision == "delete" and record.outcome.state != "pending":
+            sys.exit("ERROR: a delete decision requires the 'pending' state")
+        if args.decision == "retain" and record.outcome.state not in (
+            "pending",
+            "delete-approved",
+        ):
+            sys.exit("ERROR: a retain decision requires 'pending' or 'delete-approved' state")
+        failures, historical = migration_audit_result(record, project_root, tracker_dir)
+        print_historical_summary(historical)
+        if failures:
+            for failure in failures:
+                print(f"FAIL  {failure}")
+            sys.exit("ERROR: migration-finalize refused because migration-audit would fail")
+        fingerprint = migration_approval_fingerprint(record)
+        decision_date = today
+        if args.decision == "retain":
+            state = "retained"
+            completion_date = today
+        else:
+            state = "delete-approved"
+            completion_date = "—"
+
+    after = replace_migration_outcome(
+        before,
+        record,
+        state=state,
+        decision_date=decision_date,
+        completion_date=completion_date,
+        fingerprint=fingerprint,
+    )
+    if args.dry_run:
+        print_diff(record_path, before, after)
+        print("[dry-run] No files written.")
+        return 0
+    record_path.write_text(after, encoding="utf-8")
+    print(f"Updated: {record_path}")
+    print(f"Migration outcome: {record.outcome.state} → {state}")
+    print("Confirmed sources:")
+    for rel in sorted(record.sources):
+        print(f"  {rel}")
+    if state == "delete-approved":
+        print("No source files were deleted. Delete only the sources above, then run:")
+        print(f"  migration-finalize {args.slug} --confirm-deleted")
+    elif state == "retained":
+        print("The legacy source(s) remain retained; no files were deleted.")
+    else:
+        print("PASS  every approved source is absent and the tracker audit passes.")
     return 0
 
 
@@ -1403,6 +1825,7 @@ COMMAND_HANDLERS = {
     "check": run_check,
     "migration-inventory": run_migration_inventory,
     "migration-audit": run_migration_audit,
+    "migration-finalize": run_migration_finalize,
 }
 
 

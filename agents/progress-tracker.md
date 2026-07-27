@@ -48,8 +48,10 @@ uv run <skill-dir>/scripts/update_progress.py migration-audit <slug>
 ```
 
 `migration-audit` fails while any actionable or ambiguous source entry lacks a
-disposition and destination. An empty WIP section is not evidence of an empty
-actionable set.
+valid `migrated` or `excluded` disposition and destination, or any `migrated`
+row lacks Evidence that occurs exactly once in its destination item. Its human
+sign-offs cover work already performed. An empty WIP section is not evidence
+of an empty actionable set.
 <!-- MIGRATION_GATE_END -->
 - **During work**: use `update_progress.py update` to back-fill scope/ticket
   values, tick off exact Task list entries, add a dated Work log entry, bump
@@ -60,9 +62,10 @@ actionable set.
   `## Outcome` and set both statuses to `done` or `abandoned`, then run
   `update_progress.py check`.
 - **Cleanup is never automatic.** Do not delete current item folders or INDEX
-  rows. Delete a migrated legacy source only after `migration-audit` exits 0
-  and explicit confirmation of the exact target, then rerun `migration-audit`
-  and the other audits.
+  rows. After `migration-audit` exits 0 and the user decides, record `retain`
+  or `delete-approved` with `migration-finalize`. That command never deletes
+  sources. Remove only the sealed approved sources, then use
+  `migration-finalize --confirm-deleted` after pointer/link checks.
 - **Scope guard**: during normal lifecycle work, touch only the tracker
   directory's files (`INDEX.md`, item folders' `PROGRESS.md`, `_plans/`
   snapshots, `_migrations/` records). An explicitly approved migration may
@@ -95,7 +98,7 @@ actionable set.
   ## Status
   <the item's current Status field>
   ## Migration audit
-  <migration record path, migration-audit pass/fail, historical sections disclosed, pointer audit; or "not applicable">
+  <migration record path/schema/outcome, migration-audit pass/fail, historical entry counts, pointer audit; or "not applicable">
   ## Open questions
   <numbered; or "none">
   ```
@@ -109,7 +112,7 @@ remind them of the next lifecycle step (back-fill TBDs, update status to
 `in-progress`, fill in Outcome, etc.) per the skill's "Next steps" guidance.
 When existing tracking documents are discovered, obtain an explicit migration
 or coexistence decision before the scaffold command. After migration, report
-the migration record's location, `migration-audit`'s result, the
-historical/reference sections it disclosed, pointer audit, and intentional
+the migration record's location and outcome, `migration-audit`'s result, the
+historical/reference entry counts it disclosed, pointer audit, and intentional
 legacy references. Ask whether to delete the source only when `migration-audit`
-exits 0.
+exits 0, then persist that answer with `migration-finalize`.
