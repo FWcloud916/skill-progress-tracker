@@ -1,6 +1,6 @@
 {
   "name": "progress-tracker",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "Track local development progress across single- or multi-scope task lifecycles.",
   "author": {
     "name": "FWcloud916",

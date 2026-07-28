@@ -9,6 +9,21 @@ seems arbitrary, check here before changing it.
 
 ---
 
+## 2026-07-28 — Eval suite is not tautological with SKILL.md
+
+Audited whether the graders judge with the same logic the skill documents —
+which would let a docs change rubber-stamp itself. They do not: every
+scenario runs the real CLIs in a disposable git repo, and
+`grade_scenarios.py` asserts only on the files those runs produce
+(`files_exist` / `files_absent` / `content_contains` / `content_not_contains`
+/ `content_count`); no scenario, grader, or grader-regression test reads
+`SKILL.md` or any `references/` doc. Expected values therefore come from an
+independent truth source (script behavior), so the documentation refactor
+cannot false-green the evals and the evals cannot vouch for prose claims —
+`scripts/verify.sh` remains the gate for doc-level consistency.
+
+---
+
 ## 2026-07-28 — Invocation semantics stay single-skill
 
 Reviewed alongside the progressive-disclosure split: `check` (the tracker

@@ -65,6 +65,23 @@ python3 evals/scripts/test_grade_scenarios.py                                   
 - Requirement keywords (MUST/SHOULD/MAY) follow RFC 2119, uppercase.
 - English throughout — templates, field names, and section headings.
 
+## SKILL.md editing checklist
+
+Before committing any change to `skills/progress-tracker/SKILL.md`, ask:
+
+1. **Premature completion** — does any sentence claim behavior that no script
+   or eval enforces yet?
+2. **Duplication** — does the same rule now live in two places? Keep one
+   authoritative copy and point to it (only the gate and lifecycle marker
+   blocks are deliberately duplicated, byte-synced by verify.sh).
+3. **Sediment** — is any sentence a leftover from a superseded design?
+4. **Sprawl** — should single-branch detail move to a `references/` doc
+   behind a read-in-full pointer instead of staying top-level?
+5. **No-op** — does each sentence change behavior relative to the model's
+   default? Delete failing sentences whole.
+6. **Negation** — can a "do not" be restated as the positive target behavior?
+   (Hard guardrails stay negative.)
+
 ## Docs maintenance
 
 When modifying any file under `docs/`, update its `> **Last updated:**

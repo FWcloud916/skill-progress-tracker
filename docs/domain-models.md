@@ -13,6 +13,20 @@ migration contract in
 [`references/migration.md`](../skills/progress-tracker/references/migration.md)); this
 document maps that contract to the implementing functions in the two Python CLIs.
 
+## 0. Shared Vocabulary
+
+Terms used with a fixed meaning across `SKILL.md`, the `references/` docs,
+and this document:
+
+| Term | Definition |
+|---|---|
+| **scope** | A free-form label for one piece of a task (e.g. `api`, `payments-service`); never validated against any directory. |
+| **tracker-dir** | The tracker's root directory inside the project — `progress/` by default, overridden by `--dir` / `$PROGRESS_TRACKER_DIR` — holding `INDEX.md`, item folders, `_template/`, `_plans/`, and `_migrations/`. |
+| **preflight** | The mandatory pre-creation inspection for an existing tracking mechanism and the documents that point to it (`SKILL.md` §Before creating anything). |
+| **two-phase commit** | The migration deletion model: `migration-audit` is the prepare phase, and deletion may proceed only after it exits 0 and `migration-finalize` records the user's explicit decision (the commit). |
+| **Kind** | A migration-inventory row's generated classification: `actionable` and `ambiguous` block the audit; `done`, `empty`, and `historical` do not. |
+| **disposition** | The reviewer's ruling on an inventory row: `migrated`, `excluded`, or `not-applicable`. |
+
 ## 1. Model Details
 
 ```text
