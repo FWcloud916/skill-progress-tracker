@@ -63,6 +63,22 @@ every create runs them, not just the migration branch. `migration.md` is not
 in verify.sh's scaffold-link map, so it is never copied into user projects —
 the scaffolded seed docs already direct readers back to the installed skill.
 
+External corroboration (added the same day): Anthropic's post ["The new
+rules of context engineering for Claude 5 generation
+models"](https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models)
+independently prescribes the same moves this refactor made — progressive
+disclosure over upfront content, focused single-home guidance over
+repetition, and pruning constraint prose in favor of model judgment
+("unhobbling"). Two deliberate divergences stand: the migration gate's
+MUST NOT wording stays, because it is an incident-driven (KI-001),
+script-enforced guardrail — exactly the load-bearing minority of rules the
+post's own framing says to keep; and SKILL.md retains its three CLI
+examples plus the Key-arguments list, because verify.sh check 6 requires
+the command strings and the examples are already one-per-lifecycle-stage
+minimal. A possible future step in the post's "interface design" spirit —
+collapsing the Key-arguments list into a `--help` pointer — is deferred; it
+would be an independent change needing its own eval pass.
+
 ---
 
 ## 2026-07-27 — Package Codex directly from the repository root
