@@ -161,7 +161,7 @@ progress-tracker/
 │   └── progress-tracker/
 │       ├── SKILL.md      # canonical entry point: lifecycle, args, status enum
 │       ├── agents/       # Codex UI metadata (openai.yaml)
-│       ├── references/   # workflow spec + item/index templates + seed READMEs
+│       ├── references/   # workflow spec + migration contract + templates + seed READMEs
 │       └── scripts/      # create/update/check CLIs + their pytest suites
 ├── agents/           # dedicated agent definition (preloads the skill)
 ├── AGENTS.md         # maintainer guide for this repo (CLAUDE.md is a symlink to it)
@@ -181,6 +181,7 @@ progress-tracker/
 | [AGENTS.md](AGENTS.md) | Maintainer guide: hard constraints, the verify gate |
 | [docs/design-decisions.md](docs/design-decisions.md) | Decision log with rationale: generic scope model, script-first eval strategy |
 | [workflow.md](skills/progress-tracker/references/workflow.md) | Full workflow spec: folder structure, field semantics, cleanup policy |
+| [migration.md](skills/progress-tracker/references/migration.md) | The migration contract in full: flow, command reference, Kind/disposition rules |
 | [PROGRESS.template.md](skills/progress-tracker/references/PROGRESS.template.md) | The item template |
 | [INDEX.template.md](skills/progress-tracker/references/INDEX.template.md) | The item-list seed |
 | [evals/README.md](evals/README.md) | Scenario + trigger-matrix strategy and how to run them |

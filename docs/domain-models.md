@@ -2,14 +2,16 @@
 
 > **Type:** Reference
 > **Audience:** Developers, AI assistants, code reviewers
-> **Last updated:** 2026-07-27
+> **Last updated:** 2026-07-28
 
 ---
 
 The project has no database models. Its domain consists of Markdown records, parsed
 in-memory dataclasses, and guarded transitions between filesystem states. The canonical
-workflow contract is [`SKILL.md`](../skills/progress-tracker/SKILL.md); this document
-maps that contract to the implementing functions in the two Python CLIs.
+workflow contract is [`SKILL.md`](../skills/progress-tracker/SKILL.md) (with the
+migration contract in
+[`references/migration.md`](../skills/progress-tracker/references/migration.md)); this
+document maps that contract to the implementing functions in the two Python CLIs.
 
 ## 1. Model Details
 

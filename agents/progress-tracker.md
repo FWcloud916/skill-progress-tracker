@@ -36,7 +36,8 @@ The preloaded **progress-tracker** skill is your operating manual. Follow it str
   "in progress" section, and defaults every unrecognized heading to blocking
   rather than assuming it is safe to ignore. Copy every actionable entry,
   dispose of every inventory row, update every pointer, and audit all old
-  path/name references afterward.
+  path/name references afterward. A migration was approved → read the skill's
+  `references/migration.md` in full before running any migration command.
 
 <!-- MIGRATION_GATE_START -->
 Migration is script-gated. The deletion question MUST NOT be asked until both

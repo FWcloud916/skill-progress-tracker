@@ -2,10 +2,34 @@
 
 > **Type:** Reference
 > **Audience:** Maintainers, AI agents
-> **Last updated:** 2026-07-27
+> **Last updated:** 2026-07-28
 
 A decision log with rationale, in chronological order. When a design choice
 seems arbitrary, check here before changing it.
+
+---
+
+## 2026-07-28 — Progressive disclosure for the migration contract
+
+Migration detail (~110 of SKILL.md's 302 lines) sat top-level in `SKILL.md`
+even though only the migration branch ever needs it, and the same seven-step
+contract was restated nearly in full in `references/workflow.md`. Both copies
+now collapse to the shared preflight rules, the byte-synced
+`MIGRATION_GATE` block, and an imperative pointer ("read
+`references/migration.md` in full before running any migration command");
+`references/migration.md` is the single authoritative migration document —
+discovery/consent, the KI-001 rationale, the merged step-by-step flow, the
+command reference, and the Kind/disposition rules.
+
+Deliberate residuals: the gate block stays byte-identical in `SKILL.md`,
+`workflow.md`, and `agents/progress-tracker.md` (verify.sh check 3b) and is
+**not** duplicated into `migration.md`, which would be a fourth, unchecked
+copy; `agents/progress-tracker.md` keeps its condensed migration paraphrase
+(a subagent definition must be self-contained) plus the same read-in-full
+pointer; and SKILL.md's preflight detection rules remain top-level because
+every create runs them, not just the migration branch. `migration.md` is not
+in verify.sh's scaffold-link map, so it is never copied into user projects —
+the scaffolded seed docs already direct readers back to the installed skill.
 
 ---
 
