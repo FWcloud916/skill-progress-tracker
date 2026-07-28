@@ -580,8 +580,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "name is a free-form label (service, package, repo — not validated). "
             "Escape literal commas, colons, and backslashes with a backslash. "
             "An unescaped comma with adjacent whitespace is rejected as "
-            "ambiguous, and an empty entry (trailing/doubled comma) is "
-            "rejected. branch defaults to TBD when omitted. "
+            "ambiguous, and an empty entry (leading, trailing, or doubled "
+            "comma) is rejected. branch defaults to TBD when omitted. "
             "ticket defaults to TBD when omitted; kept verbatim otherwise."
         ),
     )

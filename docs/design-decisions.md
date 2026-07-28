@@ -9,6 +9,22 @@ seems arbitrary, check here before changing it.
 
 ---
 
+## 2026-07-28 — Shared vocabulary lives in domain-models.md, not a repo-root CONTEXT.md
+
+The improvement plan's Phase 4 prescribed a repo-root `CONTEXT.md` for shared domain
+vocabulary (scope, disposition, Kind, tracker-dir, preflight, two-phase commit).
+Implemented instead as `docs/domain-models.md` §0 Shared Vocabulary:
+
+- The terms are structural domain terminology — they sit one section above the
+  entities that define them, so definitions and structure cannot drift apart.
+- `AGENTS.md`'s task→doc table already routes "domain behavior" reads to
+  domain-models.md; a second repo-root file would split the same lookup across two
+  homes for no added recall.
+- doc-architect 2.4.0 ships an opt-in `CONTEXT.md` glossary module; this repo
+  declines the module deliberately — revisit only if the vocabulary outgrows the
+  domain reference or needs rulings that contradict it (`_Avoid_` synonym lists,
+  cross-doc drift tripwires).
+
 ## 2026-07-28 — SKILL.md defers argument semantics to the CLI interface
 
 Experiment: can SKILL.md's Key-arguments list and option prose be replaced

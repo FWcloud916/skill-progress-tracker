@@ -109,3 +109,16 @@ inventory → audit(= prepare)→ finalize(= commit)→ confirm-deleted 的結�
 | 6 | Phase 4 擇項 | CONTEXT.md 等 | verify.sh 通過 |
 
 **每個 phase 是一個獨立 commit / PR,eval 全綠才進下一個。**
+
+---
+
+## 執行偏差記錄(2026-07-28,PR #1 review 後補記)
+
+1. **基線行數 309 → 302:** 本計劃撰寫時(2026-07-27)量測 SKILL.md 為 309 行;
+   執行開始時(2026-07-28)main 上的 SKILL.md 為 302 行(期間 main 有其他變更落地)。
+   驗收指標「≤ 180 行」以執行起點 302 為基線計算,PROGRESS.md 記錄的 302 為準。
+2. **Phase 4 第 1 項改道:** 計劃寫 `CONTEXT.md`,實作裁決為
+   `docs/domain-models.md` §0 Shared Vocabulary — 詞彙緊鄰其實體定義、
+   AGENTS.md 的 task→doc 表已路由到該檔;獨立的 repo-root 檔案會把命名與
+   agents 實際閱讀的 domain 參考拆成兩處。完整理由見
+   `docs/design-decisions.md`「Shared vocabulary lives in domain-models.md」條目。

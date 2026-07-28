@@ -160,6 +160,27 @@ class TestUpdateCommand:
         assert "empty --scope entry" in result.stderr
         assert item_file(project).read_text() == before_progress
 
+    def test_explicitly_empty_scope_is_rejected_not_ignored(self, project):
+        before_progress = item_file(project).read_text()
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["update", "demo-task", "--scope", "", "--work-log", "note"],
+            project,
+        )
+        assert result.returncode != 0
+        assert "no valid entries" in result.stderr
+        assert item_file(project).read_text() == before_progress
+
+    def test_empty_scope_alone_is_a_mutation_not_omitted(self, project):
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["update", "demo-task", "--scope", ""],
+            project,
+        )
+        assert result.returncode != 0
+        assert "no valid entries" in result.stderr
+        assert "requires at least one" not in result.stderr
+
     def test_dry_run_writes_nothing(self, project):
         before_progress = item_file(project).read_text()
         before_index = (project / "progress" / "INDEX.md").read_text()

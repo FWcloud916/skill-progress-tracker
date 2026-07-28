@@ -10,7 +10,7 @@ workflow.
 | Status | Item | Folder | Scope | Ticket | Plan | Created | Notes |
 |---|---|---|---|---|---|---|---|
 | `done` | Progress Tracker Improvements | `progress/2026-07-24-progress-tracker-improvements/` | `progress-tracker` | N/A | _plans/progress-tracker-improvements-plan.md | 2026-07-24 | P0 verification truthfulness; P1 lifecycle automation and input hardening |
-| `done` | SKILL.md progressive-disclosure refactor | `progress/2026-07-28-skill-docs-progressive-disclosure/` | `progress-tracker` | N/A | [skill-docs-progressive-disclosure-progress-tracker-improvement-plan.md](_plans/skill-docs-progressive-disclosure-progress-tracker-improvement-plan.md) | 2026-07-28 |  |
+| `review` | SKILL.md progressive-disclosure refactor | `progress/2026-07-28-skill-docs-progressive-disclosure/` | `progress-tracker` | N/A | [skill-docs-progressive-disclosure-progress-tracker-improvement-plan.md](_plans/skill-docs-progressive-disclosure-progress-tracker-improvement-plan.md) | 2026-07-28 |  |
 
 ## Status legend
 

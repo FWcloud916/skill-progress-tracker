@@ -567,7 +567,7 @@ def prepare_item(args: argparse.Namespace) -> tuple[Path, str, Path, str, list[s
 
 def run_mutation(args: argparse.Namespace) -> int:
     if args.command == "update" and not any(
-        (args.status, args.scope, args.work_log, args.complete_task)
+        (args.status, args.scope is not None, args.work_log, args.complete_task)
     ):
         sys.exit(
             "ERROR: update requires at least one of --status, --scope, "
@@ -592,7 +592,7 @@ def run_mutation(args: argparse.Namespace) -> int:
     if target_status != current_status:
         progress_after = replace_metadata(progress_after, "Status", target_status, progress_path)
     scope_entries = None
-    if args.command == "update" and args.scope:
+    if args.command == "update" and args.scope is not None:
         scope_entries = parse_scope(args.scope)
         progress_after = replace_scope_table(progress_after, scope_entries, progress_path)
     if args.command == "update" and args.complete_task:
