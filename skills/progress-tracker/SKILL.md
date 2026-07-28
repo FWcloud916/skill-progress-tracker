@@ -1,24 +1,19 @@
 ---
 name: progress-tracker
 description: >-
-  Manages local development progress tracking under a project's progress/
-  directory. Trigger this skill when: (1) the user wants to start tracking a
-  development task that runs a full lifecycle (investigate → fix → test →
-  PR/MR), whether it touches one scope (service, package, repo) or spans
-  several — and wants a progress record; (2) the user asks to create,
-  update, audit/check, close out, or migrate a progress item or existing local
-  tracking documents; (3) the user explicitly invokes /progress-tracker. Do
-  NOT trigger for genuine one-off questions or trivial
-  edits with no lifecycle to track (a typo fix, a config tweak, answering a
-  question) — a single-scope bug fix that goes through investigate/fix/test/PR
-  still qualifies for (1).
+  Preflight-checked local development progress tracking under a project's
+  progress/ directory. Trigger when: (1) the user starts a development task
+  with a full lifecycle (investigate → fix → test → PR/MR) and wants a durable
+  record — create; (2) an existing item's status, scope, or work log needs
+  updating — update; (3) the tracker needs a consistency audit — audit;
+  (4) finished work needs its outcome recorded — close out; (5) existing local
+  tracking documents should be adopted — migrate; (6) the user invokes
+  /progress-tracker. Do NOT trigger for one-off questions or trivial edits
+  with no lifecycle (a typo, a config tweak); a single-scope fix with a full
+  lifecycle still qualifies.
 ---
 
 # Development Progress Tracker
-
-Track development tasks locally under a `progress/` directory at the project
-root (configurable). A task may span one scope or several (services, packages,
-sibling repos).
 
 Full spec: `references/workflow.md`
 Migration contract: `references/migration.md`
@@ -61,9 +56,8 @@ of an empty actionable set.
 
 ## Before starting work
 
-Create the progress item with the scaffold script. Resolve `<skill-dir>` to
-the directory containing this `SKILL.md`; the script locates the project root
-itself, so it runs from anywhere inside the project:
+Create the progress item with the scaffold script — resolve `<skill-dir>` to
+this `SKILL.md`'s directory; the script locates the project root itself:
 
 ```bash
 uv run <skill-dir>/scripts/new_progress.py <slug> \
@@ -80,14 +74,12 @@ Key arguments:
   comma, colon, or backslash as `\,`, `\:`, or `\\`. `branch` and per-entry
   `ticket` default to `TBD` when omitted. Ticket values are kept **verbatim**
   — any numbering convention passes through as given.
-- `--ticket` — umbrella/epic reference for the whole task (optional, `N/A`
-  if omitted). Kept verbatim.
+- `--ticket` — umbrella/epic reference for the whole task; optional, verbatim.
 - `--plan` — path to the associated plan file. The plan is **copied** into
   `<tracker-dir>/_plans/` as a version-controlled `<slug>-<plan-name>`
-  snapshot and linked via a relative Markdown link in `PROGRESS.md`. A path
-  (absolute, or containing `/`) is validated by existence directly; a bare
-  filename resolves against `$PROGRESS_TRACKER_PLANS_DIR` and is an error
-  when that env var is unset.
+  snapshot and linked from `PROGRESS.md`. A path (absolute, or containing
+  `/`) is validated by existence directly; a bare filename resolves against
+  `$PROGRESS_TRACKER_PLANS_DIR` and is an error when that env var is unset.
 - `--title` — human-readable title (defaults to the slug title-cased)
 - `--dir` — tracker directory path, relative to and strictly inside the
   project root; absolute paths, `.`, `..`, and symlinks that resolve outside
@@ -96,9 +88,8 @@ Key arguments:
 
 If a plan for this task exists anywhere, **always** pass it via `--plan`.
 
-On first use in a project, the script scaffolds the tracker directory's
-supporting files (`README.md`, `INDEX.md`, `_template/PROGRESS.md`,
-`_plans/README.md`) from this skill's bundled references.
+On first use, the script scaffolds the tracker's supporting files
+(`README.md`, `INDEX.md`, `_template/PROGRESS.md`, `_plans/README.md`).
 
 ---
 
@@ -117,14 +108,11 @@ uv run <skill-dir>/scripts/update_progress.py update <slug> \
 ```
 
 All update options are optional individually, but at least one is required.
-`--complete-task` may be repeated and matches the exact text of an unchecked
-Task list entry. `--scope` replaces the full Scope table using the same escaped
-syntax as `new_progress.py`.
-
-In one validated operation it back-fills `TBD` scope values as branches and
-tickets appear, ticks completed Task list items, adds the dated `## Work log`
-entry, bumps **Updated**, and keeps Status identical in `PROGRESS.md` and
-`<tracker-dir>/INDEX.md` per the lifecycle below.
+`--complete-task` (repeatable) matches the exact text of an unchecked Task
+list entry; `--scope` replaces the full Scope table using the same escaped
+syntax as `new_progress.py`. Back-fill `TBD` scope values as branches and
+tickets appear, log work daily, and keep Status identical in `PROGRESS.md`
+and `<tracker-dir>/INDEX.md` per the lifecycle below.
 
 Run an audit at any time (and before review/close-out):
 
@@ -154,14 +142,9 @@ Any non-terminal status → abandoned
 ```
 <!-- STATUS_LIFECYCLE_END -->
 
-| Status | Meaning |
-|---|---|
-| `planning` | Item created, implementation not started (scaffold-script default) |
-| `in-progress` | Under active development |
-| `review` | PR/MR opened, in code review / QA — **not** `done`; that comes after merge |
-| `blocked` | Paused on an external dependency |
-| `done` | Development complete (PR/MR merged) |
-| `abandoned` | Stopped without completing |
+`planning` is the scaffold default. `review` means a PR/MR is open (code
+review / QA) — **not** `done`, which comes only after merge. `blocked` is
+paused on an external dependency; `abandoned` is stopped without completing.
 
 `update_progress.py` enforces exactly the transitions the diagram shows;
 `done` and `abandoned` are terminal.
@@ -182,8 +165,8 @@ uv run <skill-dir>/scripts/update_progress.py close <slug> \
   [--dry-run]
 ```
 
-This fills `## Outcome`, appends a final Work log entry, and changes both
-status sources in one validated operation. Run `check` after close-out.
+This fills `## Outcome` and changes both status sources in one validated
+operation. Run `check` after close-out.
 
 ---
 

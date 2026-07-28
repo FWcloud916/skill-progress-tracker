@@ -9,6 +9,23 @@ seems arbitrary, check here before changing it.
 
 ---
 
+## 2026-07-28 — Invocation semantics stay single-skill
+
+Reviewed alongside the progressive-disclosure split: `check` (the tracker
+audit) stays model-invoked inside this skill so agents run it before
+review/close-out without a separate activation; migration stays in-skill too,
+loaded only through the read-in-full pointer to `references/migration.md`
+rather than split into a second skill — a split would spend an extra
+description slot in every session's context for a branch most sessions never
+take. With only two skills in this repository, a router skill is likewise
+unjustified. The frontmatter description was rewritten in the same spirit:
+one leading trigger per lifecycle branch (create / update / audit / close out
+/ migrate), front-loaded with the preflight anchor. The activation boundary
+is unchanged — the same prompts trigger and the same prompts do not — so
+`evals/trigger-matrix.json` and its case counts stay as they are.
+
+---
+
 ## 2026-07-28 — Progressive disclosure for the migration contract
 
 Migration detail (~110 of SKILL.md's 302 lines) sat top-level in `SKILL.md`
