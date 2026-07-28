@@ -12,15 +12,13 @@ several — for any project.
   tracker directory's supporting files.
 - **Migration guard, script-gated** — before first use, inventories existing
   tracking documents and their pointers and asks whether to migrate.
-  `migration-inventory` scans a legacy source **whole-document** (never just
-  an "in progress" section), can scaffold an empty tracker before destination
-  creation, and `migration-audit` is the pre-deletion gate: it
-  fails while any actionable/ambiguous entry lacks a valid `migrated` or
-  `excluded` disposition and destination, migrated Evidence is absent or
-  non-unique, any generated record field changed,
-  any old path/name or changed link is unverified, or the pre-deletion human
-  sign-off checklist is incomplete. `migration-finalize` durably records the
-  user's retain/delete decision without deleting source files.
+  Migration is a two-phase commit: `migration-inventory` scans each legacy
+  source **whole-document** (never just an "in progress" section),
+  `migration-audit` is the prepare-phase gate that must pass before the
+  deletion question may even be asked, and `migration-finalize` durably
+  records the user's retain/delete decision without deleting source files.
+  The full contract lives in
+  [`references/migration.md`](skills/progress-tracker/references/migration.md).
 - **Multi-scope, tool-agnostic** — `--scope name[:branch[:ticket]]` accepts
   any free-form label (a service, a package, a sibling repo — not validated
   against a directory) and any ticket format (serial, `#123`, `JIRA-111`, a

@@ -30,7 +30,9 @@ runtime.
 The public behavior is specified in
 [`skills/progress-tracker/SKILL.md`](../skills/progress-tracker/SKILL.md). The longer
 operational rationale and field reference live in
-[`workflow.md`](../skills/progress-tracker/references/workflow.md).
+[`workflow.md`](../skills/progress-tracker/references/workflow.md); the migration
+contract in full lives in
+[`migration.md`](../skills/progress-tracker/references/migration.md).
 
 ### 1.2 Relationship with Other Systems
 
