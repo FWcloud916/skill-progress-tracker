@@ -69,14 +69,11 @@ uv run <skill-dir>/scripts/new_progress.py <slug> \
   [--title "Task title"] [--dry-run]
 ```
 
-Argument semantics (slug format, per-entry defaults, `--plan` path
-resolution, `--dir` containment, `--root` discovery) live in the script's
-`--help` — read it before first use. Two rules the interface cannot teach at
-the right moment:
-
-- Escape a literal comma, colon, or backslash in `--scope` values as `\,`,
-  `\:`, or `\\` — an unescaped comma silently splits the entry in two.
-- If a plan for this task exists anywhere, **always** pass it via `--plan`.
+Argument semantics (slug format, `--scope` escaping, per-entry defaults,
+`--plan` path resolution, `--dir` containment, `--root` discovery) live in
+the script's `--help` — read it before first use. One rule the interface
+cannot teach: if a plan for this task exists anywhere, **always** pass it
+via `--plan`.
 
 On first use, the script scaffolds the tracker's supporting files
 (`README.md`, `INDEX.md`, `_template/PROGRESS.md`, `_plans/README.md`).

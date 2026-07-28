@@ -311,6 +311,9 @@ Only then does the record enter `deleted`.
 - `require_project_descendant()` resolves paths before accepting them, including paths
   behind existing symlinks.
 - Scope labels are parsed text and never validated as directories.
+- Ambiguous scope input fails closed: an unescaped comma touching whitespace
+  and empty scope entries are rejected at parse time, and both CLIs echo the
+  parsed scope names in normal-mode output.
 - Ticket values are trimmed and defaulted but never prefixed or reformatted.
 - Markdown table values escape pipes and backslashes; inline code chooses a delimiter
   longer than any backtick run in the value.

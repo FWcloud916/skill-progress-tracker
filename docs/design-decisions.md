@@ -31,9 +31,12 @@ Two classes of prose stayed, by rule: **behavioral policy** the interface
 cannot express (always pass `--plan` when a plan exists; back-fill `TBD`;
 keep the two Status fields identical; `review` ≠ `done`), and **silent-
 failure traps** the interface cannot catch at the right moment — the one
-found: an unescaped comma in a `--scope` value splits the entry in two with
-no error, so the escaping rule remains in SKILL.md. If a future CLI change
-makes that failure loud, the sentence can move to `--help` too.
+found: an unescaped comma in a `--scope` value used to split the entry in
+two with no error. That pre-registered condition has since fired: the parser
+now rejects whitespace-adjacent unescaped commas and empty entries, and both
+CLIs echo the parsed scope in normal mode (see the amended 2026-07-24
+escaping entry), so the escaping sentence moved out of SKILL.md into
+`--help`, leaving `--plan` as the sole interface-untaught rule.
 
 ---
 
@@ -153,7 +156,10 @@ Allowed transitions reflect normal review rework and explicit termination:
 Scope labels remain free-form and filesystem-independent. The compact legacy
 syntax stays compatible, with backslash escaping added for literal commas,
 colons, and backslashes. The first two unescaped colons delimit fields and an
-unescaped comma delimits scope entries.
+unescaped comma delimits scope entries. Amended 2026-07-28: an unescaped
+comma with adjacent whitespace is rejected as ambiguous and an empty entry
+(trailing, leading, or doubled comma) is rejected — both previously failed
+silently — and both CLIs echo the parsed scope names in normal-mode output.
 
 All CLI values written into Markdown tables are now rendered through shared
 helpers. Pipes and backslashes are escaped, code spans choose a delimiter that

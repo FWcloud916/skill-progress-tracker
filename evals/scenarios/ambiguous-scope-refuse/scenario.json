@@ -1,0 +1,12 @@
+{
+  "description": "An unescaped comma with adjacent whitespace in --scope is rejected as ambiguous instead of silently splitting the entry, and nothing is written.",
+  "steps": [
+    {"type": "run_expect_fail", "args": ["ambiguous-task", "--scope", "my label, with comma"], "expect_stderr_contains": "ambiguous"}
+  ],
+  "checks": {
+    "files_absent": [
+      "progress",
+      "*-ambiguous-task"
+    ]
+  }
+}

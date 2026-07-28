@@ -258,3 +258,5 @@ its own.
 - Don't pass a `slug` containing uppercase letters, underscores, or spaces (the script rejects it)
 - Don't use a separator other than comma between `--scope` entries (comma
   separates entries, colon separates name/branch/ticket within one)
+- Don't put whitespace around a separating comma — the parser rejects it as
+  ambiguous (escape a literal comma inside one label as `\,`)

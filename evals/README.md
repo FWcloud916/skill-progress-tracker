@@ -8,9 +8,9 @@ is a deterministic script, not a model judgment call).
 
 1. **Lifecycle scenarios** run the real scaffold script end-to-end in a
    disposable git repository and grade filesystem/content invariants —
-   creation, multi-scope expansion, escaped input, slug-namespaced plan
-   snapshots, lifecycle-script close-out, contained custom `--dir`/`--root`
-   overrides, first-inventory tracker scaffolding, and the
+   creation, multi-scope expansion, escaped input, ambiguous-scope refusal,
+   slug-namespaced plan snapshots, lifecycle-script close-out, contained
+   custom `--dir`/`--root` overrides, first-inventory tracker scaffolding, and the
    migration-inventory/migration-audit gate, per-row Evidence, durable
    migration-finalize outcomes (including the
    KI-001 regression: an empty "in progress" section must not make the audit
