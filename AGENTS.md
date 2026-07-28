@@ -44,7 +44,7 @@ single-line edits) can skip; do not pre-load all docs.
 | Changing lifecycle update, close-out, or audit behavior | [SKILL.md](skills/progress-tracker/SKILL.md) + [update_progress.py](skills/progress-tracker/scripts/update_progress.py) |
 | Changing the item template or INDEX shape | [PROGRESS.template.md](skills/progress-tracker/references/PROGRESS.template.md) + [INDEX.template.md](skills/progress-tracker/references/INDEX.template.md) |
 | Changing the status lifecycle | [SKILL.md](skills/progress-tracker/SKILL.md) §Status lifecycle + [workflow.md](skills/progress-tracker/references/workflow.md) |
-| Changing migration-inventory/migration-audit behavior or the record shape | [SKILL.md](skills/progress-tracker/SKILL.md) §Before creating anything + [MIGRATION.template.md](skills/progress-tracker/references/MIGRATION.template.md) + [KNOWN-ISSUE.md](KNOWN-ISSUE.md) KI-001 |
+| Changing migration-inventory/migration-audit behavior or the record shape | [migration.md](skills/progress-tracker/references/migration.md) + [MIGRATION.template.md](skills/progress-tracker/references/MIGRATION.template.md) + [KNOWN-ISSUE.md](KNOWN-ISSUE.md) KI-001 |
 | Changing eval scenarios or the trigger matrix | [evals/README.md](evals/README.md) |
 | Changing Codex plugin packaging or installation | [README.md](README.md) §Install + [docs/design-decisions.md](docs/design-decisions.md) Codex packaging decision |
 | Understanding why it's built this way | [docs/design-decisions.md](docs/design-decisions.md) |
@@ -64,6 +64,23 @@ python3 evals/scripts/test_grade_scenarios.py                                   
   when scale justifies it.
 - Requirement keywords (MUST/SHOULD/MAY) follow RFC 2119, uppercase.
 - English throughout — templates, field names, and section headings.
+
+## SKILL.md editing checklist
+
+Before committing any change to `skills/progress-tracker/SKILL.md`, ask:
+
+1. **Premature completion** — does any sentence claim behavior that no script
+   or eval enforces yet?
+2. **Duplication** — does the same rule now live in two places? Keep one
+   authoritative copy and point to it (only the gate and lifecycle marker
+   blocks are deliberately duplicated, byte-synced by verify.sh).
+3. **Sediment** — is any sentence a leftover from a superseded design?
+4. **Sprawl** — should single-branch detail move to a `references/` doc
+   behind a read-in-full pointer instead of staying top-level?
+5. **No-op** — does each sentence change behavior relative to the model's
+   default? Delete failing sentences whole.
+6. **Negation** — can a "do not" be restated as the positive target behavior?
+   (Hard guardrails stay negative.)
 
 ## Docs maintenance
 

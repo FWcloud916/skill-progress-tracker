@@ -2,10 +2,130 @@
 
 > **Type:** Reference
 > **Audience:** Maintainers, AI agents
-> **Last updated:** 2026-07-27
+> **Last updated:** 2026-07-28
 
 A decision log with rationale, in chronological order. When a design choice
 seems arbitrary, check here before changing it.
+
+---
+
+## 2026-07-28 — Shared vocabulary lives in domain-models.md, not a repo-root CONTEXT.md
+
+The improvement plan's Phase 4 prescribed a repo-root `CONTEXT.md` for shared domain
+vocabulary (scope, disposition, Kind, tracker-dir, preflight, two-phase commit).
+Implemented instead as `docs/domain-models.md` §0 Shared Vocabulary:
+
+- The terms are structural domain terminology — they sit one section above the
+  entities that define them, so definitions and structure cannot drift apart.
+- `AGENTS.md`'s task→doc table already routes "domain behavior" reads to
+  domain-models.md; a second repo-root file would split the same lookup across two
+  homes for no added recall.
+- doc-architect 2.4.0 ships an opt-in `CONTEXT.md` glossary module; this repo
+  declines the module deliberately — revisit only if the vocabulary outgrows the
+  domain reference or needs rulings that contradict it (`_Avoid_` synonym lists,
+  cross-doc drift tripwires).
+
+## 2026-07-28 — SKILL.md defers argument semantics to the CLI interface
+
+Experiment: can SKILL.md's Key-arguments list and option prose be replaced
+by the scripts' own `--help`, per the interface-design principle (the
+interface teaches through its structure; errors teach at the moment of the
+mistake)? Method: a fact-by-fact coverage matrix — every sentence proposed
+for deletion was checked against live `--help` output and probed error
+messages, keeping the eval philosophy's independent truth source (actual
+CLI behavior, not the docs being edited).
+
+Result: adopted. `--help` fully covers slug format, `--scope` syntax and
+defaults, verbatim tickets, `--plan` resolution, `--dir` containment, and
+`--root` discovery; `choices=` enums expose the status values; and every
+probed mistake (bad slug, bare plan filename, dir escape, optionless
+update, invalid transition, unknown slug) fails with an actionable message
+that names the fix. Those sentences left SKILL.md (180 → 162 lines) behind
+a "read `--help` before first use" pointer.
+
+Two classes of prose stayed, by rule: **behavioral policy** the interface
+cannot express (always pass `--plan` when a plan exists; back-fill `TBD`;
+keep the two Status fields identical; `review` ≠ `done`), and **silent-
+failure traps** the interface cannot catch at the right moment — the one
+found: an unescaped comma in a `--scope` value used to split the entry in
+two with no error. That pre-registered condition has since fired: the parser
+now rejects whitespace-adjacent unescaped commas and empty entries, and both
+CLIs echo the parsed scope in normal mode (see the amended 2026-07-24
+escaping entry), so the escaping sentence moved out of SKILL.md into
+`--help`, leaving `--plan` as the sole interface-untaught rule.
+
+---
+
+## 2026-07-28 — Eval suite is not tautological with SKILL.md
+
+Audited whether the graders judge with the same logic the skill documents —
+which would let a docs change rubber-stamp itself. They do not: every
+scenario runs the real CLIs in a disposable git repo, and
+`grade_scenarios.py` asserts only on the files those runs produce
+(`files_exist` / `files_absent` / `content_contains` / `content_not_contains`
+/ `content_count`); no scenario, grader, or grader-regression test reads
+`SKILL.md` or any `references/` doc. Expected values therefore come from an
+independent truth source (script behavior), so the documentation refactor
+cannot false-green the evals and the evals cannot vouch for prose claims —
+`scripts/verify.sh` remains the gate for doc-level consistency.
+
+---
+
+## 2026-07-28 — Invocation semantics stay single-skill
+
+Reviewed alongside the progressive-disclosure split: `check` (the tracker
+audit) stays model-invoked inside this skill so agents run it before
+review/close-out without a separate activation; migration stays in-skill too,
+loaded only through the read-in-full pointer to `references/migration.md`
+rather than split into a second skill — a split would spend an extra
+description slot in every session's context for a branch most sessions never
+take. With only two skills in this repository, a router skill is likewise
+unjustified. The frontmatter description was rewritten in the same spirit:
+one leading trigger per lifecycle branch (create / update / audit / close out
+/ migrate), front-loaded with the preflight anchor. The activation boundary
+is unchanged — the same prompts trigger and the same prompts do not — so
+`evals/trigger-matrix.json` and its case counts stay as they are.
+
+---
+
+## 2026-07-28 — Progressive disclosure for the migration contract
+
+Migration detail (~110 of SKILL.md's 302 lines) sat top-level in `SKILL.md`
+even though only the migration branch ever needs it, and the same seven-step
+contract was restated nearly in full in `references/workflow.md`. Both copies
+now collapse to the shared preflight rules, the byte-synced
+`MIGRATION_GATE` block, and an imperative pointer ("read
+`references/migration.md` in full before running any migration command");
+`references/migration.md` is the single authoritative migration document —
+discovery/consent, the KI-001 rationale, the merged step-by-step flow, the
+command reference, and the Kind/disposition rules.
+
+Deliberate residuals: the gate block stays byte-identical in `SKILL.md`,
+`workflow.md`, and `agents/progress-tracker.md` (verify.sh check 3b) and is
+**not** duplicated into `migration.md`, which would be a fourth, unchecked
+copy; `agents/progress-tracker.md` keeps its condensed migration paraphrase
+(a subagent definition must be self-contained) plus the same read-in-full
+pointer; and SKILL.md's preflight detection rules remain top-level because
+every create runs them, not just the migration branch. `migration.md` is not
+in verify.sh's scaffold-link map, so it is never copied into user projects —
+the scaffolded seed docs already direct readers back to the installed skill.
+
+External corroboration (added the same day): Anthropic's post ["The new
+rules of context engineering for Claude 5 generation
+models"](https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models)
+independently prescribes the same moves this refactor made — progressive
+disclosure over upfront content, focused single-home guidance over
+repetition, and pruning constraint prose in favor of model judgment
+("unhobbling"). Two deliberate divergences stand: the migration gate's
+MUST NOT wording stays, because it is an incident-driven (KI-001),
+script-enforced guardrail — exactly the load-bearing minority of rules the
+post's own framing says to keep; and SKILL.md retains its three CLI
+examples plus the Key-arguments list, because verify.sh check 6 requires
+the command strings and the examples are already one-per-lifecycle-stage
+minimal. The post's "interface design" step — collapsing the Key-arguments list into
+a `--help` pointer — was run as its own experiment and adopted the same day;
+see the next entry for the coverage-matrix method and the one fact the
+interface cannot teach.
 
 ---
 
@@ -52,7 +172,10 @@ Allowed transitions reflect normal review rework and explicit termination:
 Scope labels remain free-form and filesystem-independent. The compact legacy
 syntax stays compatible, with backslash escaping added for literal commas,
 colons, and backslashes. The first two unescaped colons delimit fields and an
-unescaped comma delimits scope entries.
+unescaped comma delimits scope entries. Amended 2026-07-28: an unescaped
+comma with adjacent whitespace is rejected as ambiguous and an empty entry
+(trailing, leading, or doubled comma) is rejected — both previously failed
+silently — and both CLIs echo the parsed scope names in normal-mode output.
 
 All CLI values written into Markdown tables are now rendered through shared
 helpers. Pipes and backslashes are escaped, code spans choose a delimiter that

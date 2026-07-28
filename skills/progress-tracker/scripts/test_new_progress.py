@@ -110,8 +110,9 @@ class TestParseScope:
         assert entries[0][0] == "totally-made-up-service-name"
 
     def test_empty_scope_errors(self):
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exc_info:
             np.parse_scope("")
+        assert "no valid entries" in str(exc_info.value)
 
     def test_empty_name_in_entry_errors(self):
         with pytest.raises(SystemExit):
@@ -135,6 +136,39 @@ class TestParseScope:
     def test_unknown_escape_errors(self):
         with pytest.raises(SystemExit):
             np.parse_scope(r"api\q")
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "api, worker",  # space after the separator
+            "api ,worker",  # space before the separator
+            "api,\tworker",  # tab counts as whitespace
+            "a:b, c",  # inside a fielded entry
+            r"api\,, worker",  # escaped comma, then an ambiguous real one
+        ],
+    )
+    def test_whitespace_adjacent_to_comma_is_ambiguous(self, value):
+        with pytest.raises(SystemExit) as exc_info:
+            np.parse_scope(value)
+        assert "ambiguous" in str(exc_info.value)
+
+    def test_padded_single_entry_is_stripped(self):
+        assert np.parse_scope(" api ") == [("api", "TBD", "TBD")]
+
+    @pytest.mark.parametrize("value", ["api,", ",api", "api,,worker"])
+    def test_empty_entry_from_extra_comma_errors(self, value):
+        with pytest.raises(SystemExit) as exc_info:
+            np.parse_scope(value)
+        assert "empty --scope entry" in str(exc_info.value)
+
+
+class TestScopeSummary:
+    def test_single_entry(self):
+        assert np.scope_summary([("api", "TBD", "TBD")]) == "api  (1 entry)"
+
+    def test_multiple_entries(self):
+        entries = [("api", "feature/x", "JIRA-1"), ("worker", "TBD", "TBD")]
+        assert np.scope_summary(entries) == "api · worker  (2 entries)"
 
 
 class TestResolvePlan:
@@ -348,6 +382,17 @@ class TestCliCreate:
         index = (project / "progress" / "INDEX.md").read_text()
         assert "| `planning` | Demo Task |" in index
         assert "`api`" in index
+
+    def test_scope_echo_in_normal_mode(self, project):
+        result = run_cli(["echo-task", "--scope", "api:feature/x,worker"], cwd=project)
+        assert result.returncode == 0, result.stderr
+        assert "Scope:    api · worker  (2 entries)" in result.stdout
+
+    def test_ambiguous_scope_writes_nothing(self, project):
+        result = run_cli(["bad-task", "--scope", "api, worker"], cwd=project)
+        assert result.returncode != 0
+        assert "ambiguous" in result.stderr
+        assert not (project / "progress").exists()
 
     def test_scope_row_expansion_multi_scope(self, project):
         run_cli(

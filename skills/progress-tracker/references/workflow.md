@@ -2,12 +2,13 @@
 
 > **Type:** How-to
 > **Audience:** Developers, AI assistants
-> **Last updated:** 2026-07-26
+> **Last updated:** 2026-07-28
 >
 > This document explains the **workflow and purpose** of the progress tracker
 > (why, folder structure, field semantics, cleanup policy). The single
 > source of truth for **operating mechanics** (script argument spec, `--plan`
-> resolution rules, status enum) is [`../SKILL.md`](../SKILL.md).
+> resolution rules, status enum) is [`../SKILL.md`](../SKILL.md); the
+> migration contract in full is [`migration.md`](migration.md).
 >
 > **Terminology:** this document uses RFC 2119 keywords — **MUST**,
 > **SHOULD**, **MAY**.
@@ -39,55 +40,13 @@ across sessions and machines.
 
 ## Existing-tracker discovery and migration
 
-Before first use, the agent **MUST** inspect the project for an existing local
-tracking mechanism and for project documents, agent instructions, scripts, or
-configuration that point to it. Likely names include root-level `PROGRESS.md`,
-`progress_note/`, `progress-notes/`, and `WORKLOG.md`, but content and documented
-purpose determine whether an artifact is a tracker. A tracker already using
-this skill's `<tracker-dir>/INDEX.md` structure is not a migration candidate.
+Before first use, the agent **MUST** run the existing-tracker preflight
+(detection rules → [`SKILL.md`](../SKILL.md) §Before creating anything).
 
-When a separate mechanism exists, the agent **MUST NOT** scaffold a parallel
-tracker without first showing the discovered artifacts and asking whether the
-user wants to migrate. Migration requires explicit approval. A declined
-migration preserves the existing mechanism; coexistence also requires an
-explicit user choice.
-
-An approved migration follows this contract. It is **script-gated**, not a
-judgment call: a real migration trial once treated an empty "current work"
-section as proof a legacy source held no actionable content, while a
-"Next steps" section and a backlog it never inspected still held unmigrated
-work (see `KNOWN-ISSUE.md` KI-001 in the repository root for the incident this
-contract was hardened against). `migration-inventory` and `migration-audit`
-exist specifically so that judgment call is no longer load-bearing.
-
-1. Inventory source artifacts and all live pointers to them. Run
-   `migration-inventory <slug> --source <legacy-path>` to produce a
-   section-by-section inventory record at `<tracker-dir>/_migrations/<slug>.md`
-   — this scans the **whole document**, not just an "in progress" or "current
-   work" section, and defaults every unrecognized heading to `ambiguous`
-   (blocking) rather than assuming it is safe to ignore. If the tracker does
-   not exist yet, this command scaffolds only its support files; create the
-   destination item(s) after the inventory exists.
-2. Agree on a source-to-destination mapping; do not infer missing task facts.
-3. Keep the source unchanged and copy every in-progress concern into the new
-   item(s): current status, scope, branch/ticket/plan references, goals,
-   unfinished tasks, current work log, blockers, next actions, and live links.
-   For each `actionable`/`ambiguous` row in the inventory record, fill in its
-   Disposition (`migrated`, `excluded`, or `not-applicable`) and
-   Destination. Every `migrated` row also gets a non-trivial Evidence locator
-   copied from the destination item.
-4. Compare source and destination field by field. For each `migrated` row,
-   verify semantic equivalence with wherever it landed and tick the record's
-   corresponding sign-off box. Missing or unexplained active content — any
-   row still `TBD` — fails the audit.
-5. Update every live pointer: links, path mentions, agent instructions, command
-   examples, scripts, and configuration.
-6. Run `update_progress.py check`, search the project for each old path/name,
-   and verify every changed relative link resolves. Classify any remaining
-   match as an intentional historical/compatibility reference, then tick the
-   record's remaining sign-off boxes (historical sections disclosed, pointer
-   audit passed, link audit passed).
-7. Run `migration-audit <slug>` — the pre-deletion gate:
+A separate tracking mechanism was discovered → read
+[`migration.md`](migration.md) in full before running any migration command.
+That document owns discovery, consent, the KI-001 rationale, the step-by-step
+flow, the authoritative command reference, and the Kind/disposition rules.
 
 <!-- MIGRATION_GATE_START -->
 Migration is script-gated. The deletion question MUST NOT be asked until both
@@ -104,20 +63,6 @@ row lacks Evidence that occurs exactly once in its destination item. Its human
 sign-offs cover work already performed. An empty WIP section is not evidence
 of an empty actionable set.
 <!-- MIGRATION_GATE_END -->
-
-   Only once `migration-audit` exits 0, show its output and ask whether to
-   delete the original artifacts. Persist a declined decision with
-   `migration-finalize <slug> --decision retain`. For an approved deletion,
-   run `migration-finalize <slug> --decision delete`; it reruns the audit,
-   seals the record and source list, and does not delete anything. Remove only
-   the approved sources, update affected pointers, run old-reference/link
-   audits, then use `migration-finalize <slug> --confirm-deleted`.
-
-The migration is not complete while `migration-audit` exits non-zero, active
-content is missing, the two records disagree, an unreviewed stale pointer
-remains, or the record outcome is still `pending`. The final report lists the
-migration record's schema and outcome, `migration-audit`'s result, historical
-entry counts, updated pointer files, and intentional legacy references.
 
 ---
 
@@ -278,14 +223,9 @@ its own.
 
 - Scripts and AI agents **MUST NOT** proactively delete current item folders or
   INDEX rows.
-- A migrated legacy source MAY be deleted only after `migration-audit` exits 0
-  and `migration-finalize --decision delete` records the user's exact target
-  approval. That command does not delete files. After removal and pointer/link
-  checks, `migration-finalize --confirm-deleted` records completion only when
-  all approved sources are absent and the sealed record is unchanged.
-- Do not delete a `<tracker-dir>/_migrations/<slug>.md` record while its
-  legacy source still exists — it is the audit trail proving the migration
-  was complete.
+- A migrated legacy source MAY be deleted only through the audited finalize
+  sequence in [`migration.md`](migration.md), which also covers retention of
+  the migration record itself.
 - Other cleanup remains a **human decision**, performed manually as needed.
 - Consider keeping `done` / `abandoned` items around for at least one sprint
   for later reference and retrospectives.
@@ -296,14 +236,8 @@ its own.
 
 ✅ **Do**
 
-- Discover existing tracking artifacts and ask before migrating or scaffolding
-  a parallel tracker
-- Run `migration-inventory` before copying anything — inventory the whole
-  source document, not just an "in progress" or "current work" section
-- Dispose of every `actionable`/`ambiguous` inventory row and run
-  `migration-audit` before asking whether to delete the source
-- Record the user's retain/delete choice with `migration-finalize`
-- Audit every old path/name and changed link after an approved migration
+- Follow [`migration.md`](migration.md) end-to-end when an existing tracking
+  mechanism is discovered
 - Preview with `--dry-run` before creating a task
 - Include **every scope entry involved** in `--scope`, even read-only ones
 - Fill in `TBD` for branch/ticket before they exist, then back-fill `## Scope` once known
@@ -316,13 +250,6 @@ its own.
 
 ❌ **Don't**
 
-- Don't treat silence as migration consent or leave stale pointers to the old
-  tracking mechanism
-- Don't ask to delete the source until `migration-audit` exits 0 — an empty
-  "in progress" section is not proof the rest of the document holds no
-  actionable content
-- Don't hand-edit a migration record's `ID`, `Kind`, `Source`, `Loc`,
-  `Section`, or `Entry` cells; re-run `migration-inventory` instead
 - Don't delete tracker-directory folders directly (update the INDEX status to
   `abandoned` first, then clean up manually)
 - Don't fill real content into `_template/PROGRESS.md` (the template should
@@ -331,3 +258,5 @@ its own.
 - Don't pass a `slug` containing uppercase letters, underscores, or spaces (the script rejects it)
 - Don't use a separator other than comma between `--scope` entries (comma
   separates entries, colon separates name/branch/ticket within one)
+- Don't put whitespace around a separating comma — the parser rejects it as
+  ambiguous (escape a literal comma inside one label as `\,`)

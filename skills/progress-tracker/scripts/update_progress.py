@@ -27,6 +27,7 @@ from pathlib import Path
 from new_progress import (
     DEFAULT_TRACKER_DIRNAME,
     REFERENCES_DIR,
+    ScopeEntry,
     markdown_code,
     markdown_table_text,
     parse_scope,
@@ -35,6 +36,7 @@ from new_progress import (
     resolve_project_root,
     resolve_tracker_dir,
     scaffold_tracker_dir,
+    scope_summary,
     validate_scaffold,
     validate_single_line,
     validate_slug,
@@ -409,8 +411,7 @@ def replace_metadata(content: str, field: str, value: str, path: Path) -> str:
     return updated
 
 
-def replace_scope_table(content: str, scope_arg: str, path: Path) -> str:
-    entries = parse_scope(scope_arg)
+def replace_scope_table(content: str, entries: list[ScopeEntry], path: Path) -> str:
     start = content.find(SCOPE_TABLE_HEADER)
     if start == -1:
         sys.exit(f"ERROR: Scope table header not found in {path}")
@@ -566,7 +567,7 @@ def prepare_item(args: argparse.Namespace) -> tuple[Path, str, Path, str, list[s
 
 def run_mutation(args: argparse.Namespace) -> int:
     if args.command == "update" and not any(
-        (args.status, args.scope, args.work_log, args.complete_task)
+        (args.status, args.scope is not None, args.work_log, args.complete_task)
     ):
         sys.exit(
             "ERROR: update requires at least one of --status, --scope, "
@@ -590,8 +591,10 @@ def run_mutation(args: argparse.Namespace) -> int:
     progress_after = progress_before
     if target_status != current_status:
         progress_after = replace_metadata(progress_after, "Status", target_status, progress_path)
-    if args.command == "update" and args.scope:
-        progress_after = replace_scope_table(progress_after, args.scope, progress_path)
+    scope_entries = None
+    if args.command == "update" and args.scope is not None:
+        scope_entries = parse_scope(args.scope)
+        progress_after = replace_scope_table(progress_after, scope_entries, progress_path)
     if args.command == "update" and args.complete_task:
         progress_after = complete_tasks(progress_after, args.complete_task, progress_path)
     work_log = args.work_log
@@ -630,6 +633,8 @@ def run_mutation(args: argparse.Namespace) -> int:
     print(f"Updated: {progress_path}")
     if index_before != index_after:
         print(f"Updated: {index_path}")
+    if scope_entries is not None:
+        print(f"Scope:   {scope_summary(scope_entries)}")
     print(f"Status:  {target_status}")
     return 0
 

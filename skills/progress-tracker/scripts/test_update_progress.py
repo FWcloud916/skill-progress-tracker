@@ -127,6 +127,60 @@ class TestUpdateCommand:
         assert "JIRA-1,JIRA-2" in content
         assert "`worker` | TBD | TBD" in content
 
+    def test_scope_replacement_echoes_parsed_entries(self, project):
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["update", "demo-task", "--scope", "api:feature/x,worker"],
+            project,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "Scope:   api · worker  (2 entries)" in result.stdout
+
+    def test_ambiguous_scope_leaves_files_unchanged(self, project):
+        before_progress = item_file(project).read_text()
+        before_index = (project / "progress" / "INDEX.md").read_text()
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["update", "demo-task", "--scope", "api, worker"],
+            project,
+        )
+        assert result.returncode != 0
+        assert "ambiguous" in result.stderr
+        assert item_file(project).read_text() == before_progress
+        assert (project / "progress" / "INDEX.md").read_text() == before_index
+
+    def test_empty_scope_entry_leaves_files_unchanged(self, project):
+        before_progress = item_file(project).read_text()
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["update", "demo-task", "--scope", "api,"],
+            project,
+        )
+        assert result.returncode != 0
+        assert "empty --scope entry" in result.stderr
+        assert item_file(project).read_text() == before_progress
+
+    def test_explicitly_empty_scope_is_rejected_not_ignored(self, project):
+        before_progress = item_file(project).read_text()
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["update", "demo-task", "--scope", "", "--work-log", "note"],
+            project,
+        )
+        assert result.returncode != 0
+        assert "no valid entries" in result.stderr
+        assert item_file(project).read_text() == before_progress
+
+    def test_empty_scope_alone_is_a_mutation_not_omitted(self, project):
+        result = run_script(
+            UPDATE_SCRIPT,
+            ["update", "demo-task", "--scope", ""],
+            project,
+        )
+        assert result.returncode != 0
+        assert "no valid entries" in result.stderr
+        assert "requires at least one" not in result.stderr
+
     def test_dry_run_writes_nothing(self, project):
         before_progress = item_file(project).read_text()
         before_index = (project / "progress" / "INDEX.md").read_text()

@@ -208,13 +208,16 @@ def parse_scope(scope_arg: str) -> list[ScopeEntry]:
       - name is a free-form label; not validated against any directory
       - branch defaults to 'TBD' when omitted or empty
       - ticket defaults to 'TBD' when omitted; kept verbatim otherwise
+      - an unescaped separator comma with whitespace on either side is
+        rejected as ambiguous, and an empty entry (trailing, leading, or
+        doubled comma) is rejected — both would otherwise fail silently
     """
     entries: list[ScopeEntry] = []
     parsed_entries: list[list[str]] = []
     segments = [""]
     escaped = False
 
-    for char in scope_arg:
+    for i, char in enumerate(scope_arg):
         if escaped:
             if char not in {",", ":", "\\"}:
                 sys.exit(
@@ -226,6 +229,15 @@ def parse_scope(scope_arg: str) -> list[ScopeEntry]:
         elif char == "\\":
             escaped = True
         elif char == ",":
+            prev_char = scope_arg[i - 1] if i else ""
+            next_char = scope_arg[i + 1] if i + 1 < len(scope_arg) else ""
+            if prev_char.isspace() or next_char.isspace():
+                sys.exit(
+                    f"ERROR: ambiguous --scope value {scope_arg!r}: whitespace "
+                    "touches an unescaped comma. Entry separators take no "
+                    "surrounding whitespace (api,worker); a literal comma inside "
+                    "one label must be escaped (my label\\, with comma)."
+                )
             parsed_entries.append(segments)
             segments = [""]
         elif char == ":" and len(segments) < 3:
@@ -239,7 +251,16 @@ def parse_scope(scope_arg: str) -> list[ScopeEntry]:
 
     for segments in parsed_entries:
         if len(segments) == 1 and not segments[0].strip():
-            continue
+            if len(parsed_entries) == 1:
+                sys.exit(
+                    "ERROR: --scope produced no valid entries. "
+                    "Provide at least one scope name."
+                )
+            sys.exit(
+                f"ERROR: empty --scope entry in {scope_arg!r}: a trailing, "
+                "leading, or doubled comma creates an empty entry. Remove the "
+                "extra comma."
+            )
         name = segments[0].strip()
         branch = segments[1].strip() if len(segments) > 1 else ""
         ticket_raw = segments[2].strip() if len(segments) > 2 else ""
@@ -256,10 +277,14 @@ def parse_scope(scope_arg: str) -> list[ScopeEntry]:
 
         entries.append((name, branch, ticket))
 
-    if not entries:
-        sys.exit("ERROR: --scope produced no valid entries. Provide at least one scope name.")
-
     return entries
+
+
+def scope_summary(entries: list[ScopeEntry]) -> str:
+    """One-line echo of the parsed scope names, so a wrong split is visible."""
+    names = " · ".join(name for name, _, _ in entries)
+    unit = "entry" if len(entries) == 1 else "entries"
+    return f"{names}  ({len(entries)} {unit})"
 
 
 def resolve_plan(plan_arg: str | None) -> tuple[str, Path | None]:
@@ -554,7 +579,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "Comma-separated `name[:branch[:ticket]]` entries. "
             "name is a free-form label (service, package, repo — not validated). "
             "Escape literal commas, colons, and backslashes with a backslash. "
-            "branch defaults to TBD when omitted. "
+            "An unescaped comma with adjacent whitespace is rejected as "
+            "ambiguous, and an empty entry (leading, trailing, or doubled "
+            "comma) is rejected. branch defaults to TBD when omitted. "
             "ticket defaults to TBD when omitted; kept verbatim otherwise."
         ),
     )
@@ -712,6 +739,7 @@ def main() -> None:
         item_dir.mkdir(parents=True)
         progress_file.write_text(rendered, encoding="utf-8")
         print(f"Created:  {progress_file}")
+        print(f"Scope:    {scope_summary(scope_entries)}")
 
     if source_path:
         copy_plan(source_path, plan_name, plans_local_dir, dry_run)

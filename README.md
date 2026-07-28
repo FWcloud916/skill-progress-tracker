@@ -12,15 +12,13 @@ several — for any project.
   tracker directory's supporting files.
 - **Migration guard, script-gated** — before first use, inventories existing
   tracking documents and their pointers and asks whether to migrate.
-  `migration-inventory` scans a legacy source **whole-document** (never just
-  an "in progress" section), can scaffold an empty tracker before destination
-  creation, and `migration-audit` is the pre-deletion gate: it
-  fails while any actionable/ambiguous entry lacks a valid `migrated` or
-  `excluded` disposition and destination, migrated Evidence is absent or
-  non-unique, any generated record field changed,
-  any old path/name or changed link is unverified, or the pre-deletion human
-  sign-off checklist is incomplete. `migration-finalize` durably records the
-  user's retain/delete decision without deleting source files.
+  Migration is a two-phase commit: `migration-inventory` scans each legacy
+  source **whole-document** (never just an "in progress" section),
+  `migration-audit` is the prepare-phase gate that must pass before the
+  deletion question may even be asked, and `migration-finalize` durably
+  records the user's retain/delete decision without deleting source files.
+  The full contract lives in
+  [`references/migration.md`](skills/progress-tracker/references/migration.md).
 - **Multi-scope, tool-agnostic** — `--scope name[:branch[:ticket]]` accepts
   any free-form label (a service, a package, a sibling repo — not validated
   against a directory) and any ticket format (serial, `#123`, `JIRA-111`, a
@@ -161,7 +159,7 @@ progress-tracker/
 │   └── progress-tracker/
 │       ├── SKILL.md      # canonical entry point: lifecycle, args, status enum
 │       ├── agents/       # Codex UI metadata (openai.yaml)
-│       ├── references/   # workflow spec + item/index templates + seed READMEs
+│       ├── references/   # workflow spec + migration contract + templates + seed READMEs
 │       └── scripts/      # create/update/check CLIs + their pytest suites
 ├── agents/           # dedicated agent definition (preloads the skill)
 ├── AGENTS.md         # maintainer guide for this repo (CLAUDE.md is a symlink to it)
@@ -181,6 +179,7 @@ progress-tracker/
 | [AGENTS.md](AGENTS.md) | Maintainer guide: hard constraints, the verify gate |
 | [docs/design-decisions.md](docs/design-decisions.md) | Decision log with rationale: generic scope model, script-first eval strategy |
 | [workflow.md](skills/progress-tracker/references/workflow.md) | Full workflow spec: folder structure, field semantics, cleanup policy |
+| [migration.md](skills/progress-tracker/references/migration.md) | The migration contract in full: flow, command reference, Kind/disposition rules |
 | [PROGRESS.template.md](skills/progress-tracker/references/PROGRESS.template.md) | The item template |
 | [INDEX.template.md](skills/progress-tracker/references/INDEX.template.md) | The item-list seed |
 | [evals/README.md](evals/README.md) | Scenario + trigger-matrix strategy and how to run them |

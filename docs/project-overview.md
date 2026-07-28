@@ -2,7 +2,7 @@
 
 > **Type:** Explanation
 > **Audience:** Developers, AI assistants, and tooling that needs project context
-> **Last updated:** 2026-07-27
+> **Last updated:** 2026-07-28
 >
 > A reusable agent skill and deterministic CLI toolkit for durable, local development-progress tracking. Related docs: [domain-models.md](domain-models.md), [coding-style.md](coding-style.md), and [design-decisions.md](design-decisions.md).
 
@@ -30,7 +30,9 @@ runtime.
 The public behavior is specified in
 [`skills/progress-tracker/SKILL.md`](../skills/progress-tracker/SKILL.md). The longer
 operational rationale and field reference live in
-[`workflow.md`](../skills/progress-tracker/references/workflow.md).
+[`workflow.md`](../skills/progress-tracker/references/workflow.md); the migration
+contract in full lives in
+[`migration.md`](../skills/progress-tracker/references/migration.md).
 
 ### 1.2 Relationship with Other Systems
 
@@ -90,7 +92,7 @@ The repository separates human/agent workflow guidance from deterministic mutati
 User or agent request
         |
         v
-skills/progress-tracker/SKILL.md --------> references/workflow.md
+skills/progress-tracker/SKILL.md --------> references/workflow.md + migration.md
         |                                          |
         | chooses command                          | explains fields and policy
         v                                          v
@@ -143,7 +145,7 @@ progress-tracker/
 └── skills/progress-tracker/
     ├── SKILL.md                  # Canonical agent workflow and public command contract
     ├── agents/openai.yaml        # Codex skill UI metadata
-    ├── references/               # Workflow, templates, and generated tracker seed docs
+    ├── references/               # Workflow, migration contract, templates, and seed docs
     └── scripts/
         ├── new_progress.py       # Scaffold and create CLI
         ├── update_progress.py    # Update, close, audit, and migration CLI
