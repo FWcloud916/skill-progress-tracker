@@ -15,8 +15,7 @@ description: >-
 
 # Development Progress Tracker
 
-Full spec: `references/workflow.md`
-Migration contract: `references/migration.md`
+Full spec: `references/workflow.md` · Migration contract: `references/migration.md`
 
 ## Before creating anything: existing-tracker preflight
 
@@ -35,6 +34,9 @@ existing mechanism; a second tracker requires an explicit coexistence choice.
 
 A migration was approved → read `references/migration.md` in full before
 running any migration command.
+
+Migration is a two-phase commit: the audit is the prepare phase; nothing is
+deleted until it votes yes.
 
 <!-- MIGRATION_GATE_START -->
 Migration is script-gated. The deletion question MUST NOT be asked until both

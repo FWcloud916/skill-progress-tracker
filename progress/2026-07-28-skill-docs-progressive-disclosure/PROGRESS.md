@@ -31,6 +31,7 @@
 -
 - Phase 1: split migration contract into references/migration.md (single authoritative doc, absorbing workflow.md's parallel section), pruned SKILL.md 302 -> 195 lines, synced doc surfaces; verify.sh green.
 - Phase 2: rewrote frontmatter description (one leading trigger per lifecycle branch, preflight anchor, 110 words) and recorded the single-skill invocation-semantics decision; SKILL.md at 178 lines.
+- Phase 3: anchored the two-phase-commit leading sentence above the gate block (outside the byte-synced markers) and in migration.md's opening; negation scan kept hard guardrails, soft negations were already rewritten positively during the split.
 
 ## Outcome
 
