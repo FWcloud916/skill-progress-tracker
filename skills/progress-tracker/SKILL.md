@@ -69,26 +69,14 @@ uv run <skill-dir>/scripts/new_progress.py <slug> \
   [--title "Task title"] [--dry-run]
 ```
 
-Key arguments:
-- `slug` — kebab-case identifier, e.g. `subscription-refund-flow`
-- `--scope` — `name[:branch[:ticket]]`, comma-separated. `name` is a
-  free-form label — not validated against any directory. Escape a literal
-  comma, colon, or backslash as `\,`, `\:`, or `\\`. `branch` and per-entry
-  `ticket` default to `TBD` when omitted. Ticket values are kept **verbatim**
-  — any numbering convention passes through as given.
-- `--ticket` — umbrella/epic reference for the whole task; optional, verbatim.
-- `--plan` — path to the associated plan file. The plan is **copied** into
-  `<tracker-dir>/_plans/` as a version-controlled `<slug>-<plan-name>`
-  snapshot and linked from `PROGRESS.md`. A path (absolute, or containing
-  `/`) is validated by existence directly; a bare filename resolves against
-  `$PROGRESS_TRACKER_PLANS_DIR` and is an error when that env var is unset.
-- `--title` — human-readable title (defaults to the slug title-cased)
-- `--dir` — tracker directory path, relative to and strictly inside the
-  project root; absolute paths, `.`, `..`, and symlinks that resolve outside
-  the root are rejected. Defaults to `$PROGRESS_TRACKER_DIR`, then `progress`.
-- `--root` — project root. Defaults to the git toplevel, then the cwd.
+Argument semantics (slug format, per-entry defaults, `--plan` path
+resolution, `--dir` containment, `--root` discovery) live in the script's
+`--help` — read it before first use. Two rules the interface cannot teach at
+the right moment:
 
-If a plan for this task exists anywhere, **always** pass it via `--plan`.
+- Escape a literal comma, colon, or backslash in `--scope` values as `\,`,
+  `\:`, or `\\` — an unescaped comma silently splits the entry in two.
+- If a plan for this task exists anywhere, **always** pass it via `--plan`.
 
 On first use, the script scaffolds the tracker's supporting files
 (`README.md`, `INDEX.md`, `_template/PROGRESS.md`, `_plans/README.md`).
@@ -109,21 +97,17 @@ uv run <skill-dir>/scripts/update_progress.py update <slug> \
   [--dry-run]
 ```
 
-All update options are optional individually, but at least one is required.
-`--complete-task` (repeatable) matches the exact text of an unchecked Task
-list entry; `--scope` replaces the full Scope table using the same escaped
-syntax as `new_progress.py`. Back-fill `TBD` scope values as branches and
-tickets appear, log work daily, and keep Status identical in `PROGRESS.md`
-and `<tracker-dir>/INDEX.md` per the lifecycle below.
+Option semantics live in `update --help`; invalid input fails with the
+allowed values. Back-fill `TBD` scope values as branches and tickets appear,
+log work daily, and keep Status identical in `PROGRESS.md` and
+`<tracker-dir>/INDEX.md` per the lifecycle below.
 
-Run an audit at any time (and before review/close-out):
+Audit consistency at any time — before review/close-out and after any manual
+edit:
 
 ```bash
 uv run <skill-dir>/scripts/update_progress.py check [--dir <dir>] [--root <path>]
 ```
-
-`check` detects invalid statuses, duplicate slugs/rows, missing or stale INDEX
-rows, and status drift; run it after any manual edit.
 
 ---
 
@@ -155,8 +139,7 @@ paused on an external dependency; `abandoned` is stopped without completing.
 
 ## After completing work
 
-Close the item with the lifecycle script. `--outcome` is required; `--status`
-defaults to `done` and may also be `abandoned`:
+Close the item with the lifecycle script:
 
 ```bash
 uv run <skill-dir>/scripts/update_progress.py close <slug> \
@@ -167,8 +150,7 @@ uv run <skill-dir>/scripts/update_progress.py close <slug> \
   [--dry-run]
 ```
 
-This fills `## Outcome` and changes both status sources in one validated
-operation. Run `check` after close-out.
+Run `check` after close-out.
 
 ---
 

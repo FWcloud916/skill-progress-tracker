@@ -9,6 +9,34 @@ seems arbitrary, check here before changing it.
 
 ---
 
+## 2026-07-28 — SKILL.md defers argument semantics to the CLI interface
+
+Experiment: can SKILL.md's Key-arguments list and option prose be replaced
+by the scripts' own `--help`, per the interface-design principle (the
+interface teaches through its structure; errors teach at the moment of the
+mistake)? Method: a fact-by-fact coverage matrix — every sentence proposed
+for deletion was checked against live `--help` output and probed error
+messages, keeping the eval philosophy's independent truth source (actual
+CLI behavior, not the docs being edited).
+
+Result: adopted. `--help` fully covers slug format, `--scope` syntax and
+defaults, verbatim tickets, `--plan` resolution, `--dir` containment, and
+`--root` discovery; `choices=` enums expose the status values; and every
+probed mistake (bad slug, bare plan filename, dir escape, optionless
+update, invalid transition, unknown slug) fails with an actionable message
+that names the fix. Those sentences left SKILL.md (180 → 162 lines) behind
+a "read `--help` before first use" pointer.
+
+Two classes of prose stayed, by rule: **behavioral policy** the interface
+cannot express (always pass `--plan` when a plan exists; back-fill `TBD`;
+keep the two Status fields identical; `review` ≠ `done`), and **silent-
+failure traps** the interface cannot catch at the right moment — the one
+found: an unescaped comma in a `--scope` value splits the entry in two with
+no error, so the escaping rule remains in SKILL.md. If a future CLI change
+makes that failure loud, the sentence can move to `--help` too.
+
+---
+
 ## 2026-07-28 — Eval suite is not tautological with SKILL.md
 
 Audited whether the graders judge with the same logic the skill documents —
@@ -75,9 +103,10 @@ script-enforced guardrail — exactly the load-bearing minority of rules the
 post's own framing says to keep; and SKILL.md retains its three CLI
 examples plus the Key-arguments list, because verify.sh check 6 requires
 the command strings and the examples are already one-per-lifecycle-stage
-minimal. A possible future step in the post's "interface design" spirit —
-collapsing the Key-arguments list into a `--help` pointer — is deferred; it
-would be an independent change needing its own eval pass.
+minimal. The post's "interface design" step — collapsing the Key-arguments list into
+a `--help` pointer — was run as its own experiment and adopted the same day;
+see the next entry for the coverage-matrix method and the one fact the
+interface cannot teach.
 
 ---
 
